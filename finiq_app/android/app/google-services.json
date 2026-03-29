@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "182356247517",
+    "project_id": "finqi-e61e1",
+    "storage_bucket": "finqi-e61e1.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:182356247517:android:4015acde850582179f6c34",
+        "android_client_info": {
+          "package_name": "com.aimoneymentor.finiq"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "182356247517-n6bjq4khmamnhf8u06ig2tqvi23qj9s3.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.aimoneymentor.finiq",
+            "certificate_hash": "8c907cc44e0399c54e283bc760f895aacc9b0cee"
+          }
+        },
+        {
+          "client_id": "182356247517-rc71a06hfoem97h1jb0r37hm7of530ut.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDdvEmD1VA50UEcl4aInuMUNDMJuufMb5s"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "182356247517-rc71a06hfoem97h1jb0r37hm7of530ut.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -1,0 +1,85 @@
+# ===========================
+# Flutter / Dart (finiq_app)
+# ===========================
+*.class
+*.log
+*.pyc
+*.swp
+.DS_Store
+.atom/
+.build/
+.buildlog/
+.history
+.svn/
+.swiftpm/
+migrate_working_dir/
+
+# IntelliJ
+*.iml
+*.ipr
+*.iws
+.idea/
+
+# Flutter/Dart/Pub
+**/doc/api/
+**/ios/Flutter/.last_build_id
+.dart_tool/
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+finiq_app/build/
+finiq_app/coverage/
+
+# Symbolication / Obfuscation
+app.*.symbols
+app.*.map.json
+
+# Android Studio artifacts
+finiq_app/android/app/debug
+finiq_app/android/app/profile
+finiq_app/android/app/release
+
+# Generated log/analysis files
+finiq_app/run_log.txt
+finiq_app/run_log_utf8.txt
+finiq_app/build_log.txt
+finiq_app/analysis.txt
+finiq_app/analysis2.txt
+finiq_app/analysis3.txt
+finiq_app/analysis4.txt
+finiq_app/analysis5.txt
+finiq_app/analyze_result.txt
+finiq_app/sha1.txt
+
+# ===========================
+# Python / Flask (finiq_backend)
+# ===========================
+
+# Virtual environment
+finiq_backend/venv/
+finiq_backend/.venv/
+finiq_backend/env/
+
+# Environment variables (secrets!)
+finiq_backend/.env
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Distribution / packaging
+finiq_backend/dist/
+finiq_backend/build/
+finiq_backend/*.egg-info/
+finiq_backend/.eggs/
+
+# Testing
+finiq_backend/.pytest_cache/
+finiq_backend/htmlcov/
+finiq_backend/.coverage
+
+# Misc
+*.DS_Store
