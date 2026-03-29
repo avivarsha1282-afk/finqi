@@ -1,7 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../core/constants/api_constants.dart';
-import '../models/user_model.dart';
 import '../models/health_score_model.dart';
 import '../models/fire_plan_model.dart';
 import '../models/tax_report_model.dart';
@@ -24,9 +23,9 @@ class ApiService {
 
   void init() {
     _dio = Dio(BaseOptions(
-      baseUrl: ApiConstants.baseUrl,
-      connectTimeout: const Duration(seconds: ApiConstants.connectTimeoutSec),
-      receiveTimeout: const Duration(seconds: ApiConstants.receiveTimeoutSec),
+      baseUrl: 'http://localhost:5000/api',
+      connectTimeout: const Duration(seconds: 15),
+      receiveTimeout: const Duration(seconds: 15),
       headers: {'Content-Type': 'application/json'},
     ));
 
@@ -65,7 +64,7 @@ class ApiService {
   // ─── Auth ────────────────────────────────────────────────
   Future<Map<String, dynamic>> verifyAuth() async {
     try {
-      final res = await _dio.post(ApiConstants.verifyAuth);
+      final res = await _dio.post('/auth/verify');
       return res.data as Map<String, dynamic>;
     } on DioException catch (e) {
       throw ApiException(_friendlyError(e), statusCode: e.response?.statusCode);
@@ -75,7 +74,7 @@ class ApiService {
   // ─── Onboarding ───────────────────────────────────────────
   Future<Map<String, dynamic>> saveOnboarding(Map<String, dynamic> answers) async {
     try {
-      final res = await _dio.post(ApiConstants.saveOnboarding, data: answers);
+      final res = await _dio.post('/user/onboarding', data: answers);
       return res.data as Map<String, dynamic>;
     } on DioException catch (e) {
       throw ApiException(_friendlyError(e), statusCode: e.response?.statusCode);
@@ -86,9 +85,9 @@ class ApiService {
   Future<HealthScoreModel> calculateScore() async {
     if (ApiConstants.demoMode) return HealthScoreModel.demo();
     try {
-      final res = await _dio.post(ApiConstants.calculateScore);
+      final res = await _dio.post('/data/calculate-score');
       return HealthScoreModel.fromJson(res.data as Map<String, dynamic>);
-    } on DioException catch (e) {
+    } on DioException catch (_) {
       // Return demo model on error for hackathon reliability
       return HealthScoreModel.demo();
     }
@@ -102,13 +101,13 @@ class ApiService {
   }) async {
     if (ApiConstants.demoMode) return FirePlanModel.demo();
     try {
-      final res = await _dio.post(ApiConstants.firePlan, data: {
+      final res = await _dio.post('/data/fire-plan', data: {
         'target_amount': targetAmount,
         'target_years': targetYears,
         'current_savings': currentSavings,
       });
       return FirePlanModel.fromJson(res.data as Map<String, dynamic>);
-    } on DioException catch (e) {
+    } on DioException catch (_) {
       return FirePlanModel.demo();
     }
   }
@@ -120,12 +119,12 @@ class ApiService {
   }) async {
     if (ApiConstants.demoMode) return TaxReportModel.demo();
     try {
-      final res = await _dio.post(ApiConstants.taxCompare, data: {
+      final res = await _dio.post('/data/tax-compare', data: {
         'annual_income': annualIncome,
         'deductions': deductions ?? {},
       });
       return TaxReportModel.fromJson(res.data as Map<String, dynamic>);
-    } on DioException catch (e) {
+    } on DioException catch (_) {
       return TaxReportModel.demo();
     }
   }
@@ -144,7 +143,7 @@ class ApiService {
           ? recentHistory.sublist(recentHistory.length - 8)
           : recentHistory;
 
-      final res = await _dio.post(ApiConstants.chatMessage, data: {
+      final res = await _dio.post('/chat/message', data: {
         'message': message,
         'language': language,
         'user_context': userContext ?? {},
@@ -172,7 +171,7 @@ class ApiService {
   // ─── Dashboard ─────────────────────────────────────────────
   Future<Map<String, dynamic>> getDashboard() async {
     try {
-      final res = await _dio.get(ApiConstants.dashboard);
+      final res = await _dio.get('/data/dashboard');
       return res.data as Map<String, dynamic>;
     } on DioException catch (e) {
       throw ApiException(_friendlyError(e));

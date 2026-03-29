@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import '../../../services/user_prefs_service.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/constants/api_constants.dart';
@@ -78,8 +78,7 @@ class _LanguageSelectionScreenState extends ConsumerState<LanguageSelectionScree
               // Continue button
               ElevatedButton(
                 onPressed: () async {
-                  final prefs = await SharedPreferences.getInstance();
-                  await prefs.setString(ApiConstants.keyLanguage, _selected);
+                  await UserPrefsService.setString('app_language', _selected);
                   ref.read(languageProvider.notifier).setLanguage(_selected);
                   if (context.mounted) context.go('/onboarding/welcome');
                 },

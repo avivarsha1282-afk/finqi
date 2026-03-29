@@ -1,7 +1,9 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../models/health_score_model.dart';
-import '../../../services/api_service.dart';
+import '../../dashboard/providers/dashboard_provider.dart';
 
-final scoreProvider = FutureProvider.autoDispose<HealthScoreModel>((ref) async {
-  return await ApiService.instance.calculateScore();
+/// Health score provider — reads from SharedPreferences via dashboardProvider
+final scoreProvider = FutureProvider<HealthScoreModel>((ref) async {
+  final dash = await ref.watch(dashboardProvider.future);
+  return dash.score;
 });

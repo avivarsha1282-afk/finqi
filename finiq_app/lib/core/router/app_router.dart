@@ -1,29 +1,31 @@
+import 'dart:async';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import '../../features/auth/screens/splash_screen.dart';
 import '../../features/auth/screens/login_screen.dart';
-import '../../features/language/screens/language_selection_screen.dart';
-import '../../features/onboarding/screens/onboarding_welcome_screen.dart';
-import '../../features/onboarding/screens/onboarding_chat_screen.dart';
+import '../../features/onboarding/screens/onboarding_step1_screen.dart';
+import '../../features/onboarding/screens/onboarding_step2_screen.dart';
+import '../../features/onboarding/screens/onboarding_step3_screen.dart';
+import '../../features/onboarding/screens/onboarding_step4_screen.dart';
+import '../../features/onboarding/screens/onboarding_step5_screen.dart';
+import '../../features/onboarding/screens/onboarding_processing_screen.dart';
 import '../../features/dashboard/screens/dashboard_screen.dart';
 import '../../features/health_score/screens/health_score_screen.dart';
 import '../../features/health_score/screens/dimension_detail_screen.dart';
 import '../../features/fire_planner/screens/fire_planner_screen.dart';
 import '../../features/tax_wizard/screens/tax_wizard_screen.dart';
-import '../../features/chat/screens/chat_screen.dart';
+import '../../features/artha/screens/artha_chat_screen.dart';
 import '../../features/profile/screens/profile_screen.dart';
-import '../../features/auth/providers/auth_provider.dart';
-import '../constants/api_constants.dart';
+import '../../features/profile/screens/edit_profile_screen.dart';
+import '../../services/user_prefs_service.dart';
+
 
 final _rootNavigatorKey = GlobalKey<NavigatorState>();
 final _shellNavigatorKey = GlobalKey<NavigatorState>();
 
 final appRouterProvider = Provider<GoRouter>((ref) {
-  final authState = ref.watch(authStateProvider);
-
   return GoRouter(
     navigatorKey: _rootNavigatorKey,
     initialLocation: '/splash',
@@ -42,24 +44,16 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         return '/login';
       }
 
-      // User is logged in — check onboarding
-      final prefs = await SharedPreferences.getInstance();
-      final lang = prefs.getString(ApiConstants.keyLanguage);
-      final onboardingDone = prefs.getBool(ApiConstants.keyOnboardingComplete) ?? false;
-
-      if (lang == null) {
-        if (currentPath == '/language') return null;
-        return '/language';
-      }
+      // User is logged in — check UID-prefixed onboarding status
+      final onboardingDone = await UserPrefsService.isOnboardingComplete();
 
       if (!onboardingDone) {
         if (currentPath.startsWith('/onboarding')) return null;
-        return '/onboarding/welcome';
+        return '/onboarding/step1';
       }
 
-      if (currentPath == '/login' || currentPath == '/language' ||
-          currentPath.startsWith('/onboarding')) {
-        return '/dashboard';
+      if (currentPath == '/login' || currentPath.startsWith('/onboarding')) {
+        return '/home';
       }
 
       return null;
@@ -67,18 +61,35 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     routes: [
       GoRoute(path: '/splash', builder: (_, __) => const SplashScreen()),
       GoRoute(path: '/login', builder: (_, __) => const LoginScreen()),
-      GoRoute(path: '/language', builder: (_, __) => const LanguageSelectionScreen()),
-      GoRoute(path: '/onboarding/welcome', builder: (_, __) => const OnboardingWelcomeScreen()),
-      GoRoute(path: '/onboarding/chat', builder: (_, __) => const OnboardingChatScreen()),
 
-      // Shell with bottom nav
+      // Onboarding steps
+      GoRoute(path: '/onboarding/step1', builder: (_, __) => const OnboardingStep1Screen()),
+      GoRoute(path: '/onboarding/step2', builder: (_, __) => const OnboardingStep2Screen()),
+      GoRoute(path: '/onboarding/step3', builder: (_, __) => const OnboardingStep3Screen()),
+      GoRoute(path: '/onboarding/step4', builder: (_, __) => const OnboardingStep4Screen()),
+      GoRoute(path: '/onboarding/step5', builder: (_, __) => const OnboardingStep5Screen()),
+      GoRoute(path: '/onboarding/processing', builder: (_, __) => const OnboardingProcessingScreen()),
+
+      // Profile (push route, NOT in shell)
+      GoRoute(
+        path: '/profile',
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (_, __) => const ProfileScreen(),
+      ),
+      GoRoute(
+        path: '/profile/edit',
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (_, __) => const EditProfileScreen(),
+      ),
+
+      // Shell with bottom nav: Home | Health | FIRE | Artha | Tax
       ShellRoute(
         navigatorKey: _shellNavigatorKey,
         builder: (context, state, child) {
           return ScaffoldWithBottomNav(child: child, currentPath: state.uri.path);
         },
         routes: [
-          GoRoute(path: '/dashboard', builder: (_, __) => const DashboardScreen()),
+          GoRoute(path: '/home', builder: (_, __) => const DashboardScreen()),
           GoRoute(path: '/health', builder: (_, __) => const HealthScoreScreen()),
           GoRoute(
             path: '/health/detail/:dimension',
@@ -87,9 +98,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             ),
           ),
           GoRoute(path: '/fire', builder: (_, __) => const FirePlannerScreen()),
+          GoRoute(path: '/artha', builder: (_, __) => const ArthaChatScreen()),
           GoRoute(path: '/tax', builder: (_, __) => const TaxWizardScreen()),
-          GoRoute(path: '/chat', builder: (_, __) => const ChatScreen()),
-          GoRoute(path: '/profile', builder: (_, __) => const ProfileScreen()),
         ],
       ),
     ],
@@ -110,10 +120,9 @@ class ScaffoldWithBottomNav extends StatelessWidget {
   int _selectedIndex(String path) {
     if (path.startsWith('/health')) return 1;
     if (path.startsWith('/fire')) return 2;
-    if (path.startsWith('/tax')) return 3;
-    if (path.startsWith('/profile')) return 4;
-    if (path.startsWith('/chat')) return 4; // Chat is under Profile umbrella
-    return 0; // dashboard
+    if (path.startsWith('/artha')) return 3;
+    if (path.startsWith('/tax')) return 4;
+    return 0; // home
   }
 
   @override
@@ -129,19 +138,19 @@ class ScaffoldWithBottomNav extends StatelessWidget {
           currentIndex: idx,
           onTap: (i) {
             switch (i) {
-              case 0: context.go('/dashboard'); break;
+              case 0: context.go('/home'); break;
               case 1: context.go('/health'); break;
               case 2: context.go('/fire'); break;
-              case 3: context.go('/tax'); break;
-              case 4: context.go('/profile'); break;
+              case 3: context.go('/artha'); break;
+              case 4: context.go('/tax'); break;
             }
           },
           items: const [
             BottomNavigationBarItem(icon: Icon(Icons.home_rounded), label: 'Home'),
             BottomNavigationBarItem(icon: Icon(Icons.favorite_rounded), label: 'Health'),
             BottomNavigationBarItem(icon: Icon(Icons.local_fire_department_rounded), label: 'FIRE'),
+            BottomNavigationBarItem(icon: Icon(Icons.auto_awesome_rounded), label: 'Artha'),
             BottomNavigationBarItem(icon: Icon(Icons.receipt_long_rounded), label: 'Tax'),
-            BottomNavigationBarItem(icon: Icon(Icons.person_rounded), label: 'Profile'),
           ],
         ),
       ),
@@ -151,11 +160,12 @@ class ScaffoldWithBottomNav extends StatelessWidget {
 
 // Listenable for GoRouter refresh on auth changes
 class GoRouterRefreshStream extends ChangeNotifier {
+  late final StreamSubscription<dynamic> _sub;
+
   GoRouterRefreshStream(Stream<dynamic> stream) {
     notifyListeners();
     _sub = stream.listen((_) => notifyListeners());
   }
-  late final dynamic _sub;
 
   @override
   void dispose() {

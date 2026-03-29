@@ -2,10 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../../core/constants/app_colors.dart';
-import '../../../core/constants/api_constants.dart';
+import '../../../services/user_prefs_service.dart';
 
 class SplashScreen extends ConsumerStatefulWidget {
   const SplashScreen({super.key});
@@ -31,18 +30,15 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
       return;
     }
 
-    final prefs = await SharedPreferences.getInstance();
-    final lang = prefs.getString(ApiConstants.keyLanguage);
-    final onboardingDone = prefs.getBool(ApiConstants.keyOnboardingComplete) ?? false;
+    // UID-prefixed onboarding check — ensures per-user state
+    final onboardingDone = await UserPrefsService.isOnboardingComplete();
 
     if (!mounted) return;
 
-    if (lang == null) {
-      context.go('/language');
-    } else if (!onboardingDone) {
-      context.go('/onboarding/welcome');
+    if (!onboardingDone) {
+      context.go('/onboarding/step1');
     } else {
-      context.go('/dashboard');
+      context.go('/home');
     }
   }
 
@@ -123,10 +119,8 @@ class _LogoPainter extends CustomPainter {
     final center = Offset(size.width / 2, size.height / 2);
     final radius = size.width * 0.3;
 
-    // Circle
     canvas.drawCircle(center, radius, paint);
 
-    // Arc crossing through the circle
     final arcPaint = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2

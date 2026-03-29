@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
-import '../../../core/constants/app_text_styles.dart';
 import '../providers/auth_provider.dart';
 
 class LoginScreen extends ConsumerWidget {
@@ -31,7 +29,6 @@ class LoginScreen extends ConsumerWidget {
           padding: const EdgeInsets.symmetric(horizontal: 20),
           child: Column(
             children: [
-              // Top spacer — 35% of screen is empty
               const Spacer(flex: 3),
 
               // Logo
@@ -75,64 +72,17 @@ class LoginScreen extends ConsumerWidget {
                 ],
               ).animate().fadeIn(duration: 600.ms),
 
-              // Large empty space
               const Spacer(flex: 4),
 
-              // Buttons
+              // Google Sign-In — ONLY auth method
               Column(
                 children: [
-                  // Google button
                   _buildGoogleButton(context, ref, authState),
-                  const SizedBox(height: 12),
-
-                  // Email button (placeholder — leads to google)
-                  OutlinedButton.icon(
-                    onPressed: authState.isLoading ? null : () {
-                      // For v1, email points to same Google flow
-                      ref.read(authControllerProvider.notifier).signInWithGoogle()
-                          .then((isNew) => _handleLoginResult(context, ref, isNew));
-                    },
-                    icon: const Icon(Icons.email_outlined, size: 20, color: AppColors.textSecondary),
-                    label: Text(
-                      'Continue with Email',
-                      style: AppTextStyles.buttonSecondary.copyWith(color: AppColors.textPrimary),
-                    ),
-                    style: OutlinedButton.styleFrom(
-                      minimumSize: const Size(double.infinity, 52),
-                      side: const BorderSide(color: AppColors.borderColor),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                    ),
-                  ),
-
-                  const SizedBox(height: 20),
-
-                  // Already have account
-                  GestureDetector(
-                    onTap: authState.isLoading ? null : () {
-                      ref.read(authControllerProvider.notifier).signInWithGoogle()
-                          .then((isNew) => _handleLoginResult(context, ref, isNew));
-                    },
-                    child: RichText(
-                      text: const TextSpan(
-                        style: TextStyle(fontSize: 13),
-                        children: [
-                          TextSpan(text: 'Already have an account? ', style: TextStyle(color: AppColors.textTertiary)),
-                          TextSpan(text: 'Log in', style: TextStyle(color: AppColors.primaryTeal, fontWeight: FontWeight.w600)),
-                        ],
-                      ),
-                    ),
-                  ),
-
-                  const SizedBox(height: 12),
-
-                  // Demo button
-                  TextButton(
-                    onPressed: authState.isLoading ? null : () async {
-                      await ref.read(authControllerProvider.notifier).signInDemo();
-                      if (context.mounted) context.go('/dashboard');
-                    },
-                    child: const Text('[ DEMO MODE ]',
-                        style: TextStyle(fontSize: 11, color: AppColors.textTertiary, letterSpacing: 1)),
+                  const SizedBox(height: 32),
+                  const Text(
+                    'By continuing, you agree to our Terms of Service\nand Privacy Policy',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 11, color: AppColors.textTertiary, height: 1.5),
                   ),
                 ],
               ).animate(delay: 400.ms).fadeIn(duration: 500.ms).slideY(begin: 0.1, end: 0),
@@ -155,13 +105,13 @@ class LoginScreen extends ConsumerWidget {
   Widget _buildGoogleButton(BuildContext context, WidgetRef ref, AuthState authState) {
     return GestureDetector(
       onTap: authState.isLoading ? null : () async {
-        final isNew = await ref.read(authControllerProvider.notifier).signInWithGoogle();
-        if (context.mounted) _handleLoginResult(context, ref, isNew);
+        await ref.read(authControllerProvider.notifier).signInWithGoogle();
+        // Router redirect handles navigation automatically
       },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 100),
         width: double.infinity,
-        height: 52,
+        height: 56,
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(14),
@@ -176,17 +126,12 @@ class LoginScreen extends ConsumerWidget {
                   const SizedBox(width: 12),
                   const Text(
                     'Continue with Google',
-                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Colors.black87),
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.black87),
                   ),
                 ],
               ),
       ),
     );
-  }
-
-  void _handleLoginResult(BuildContext context, WidgetRef ref, bool isNew) {
-    if (!context.mounted) return;
-    // Router redirect handles navigation automatically
   }
 }
 
@@ -194,14 +139,14 @@ class _GoogleIcon extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 20,
-      height: 20,
+      width: 22,
+      height: 22,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(4),
       ),
       child: const Text('G', style: TextStyle(
         color: Color(0xFF4285F4),
-        fontSize: 16,
+        fontSize: 18,
         fontWeight: FontWeight.w700,
       )),
     );

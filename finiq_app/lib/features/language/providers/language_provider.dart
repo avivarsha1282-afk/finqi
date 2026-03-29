@@ -1,6 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import '../../../core/constants/api_constants.dart';
+import '../../../services/user_prefs_service.dart';
 
 class LanguageNotifier extends StateNotifier<String> {
   LanguageNotifier() : super('en') {
@@ -8,14 +7,13 @@ class LanguageNotifier extends StateNotifier<String> {
   }
 
   Future<void> _load() async {
-    final prefs = await SharedPreferences.getInstance();
-    state = prefs.getString(ApiConstants.keyLanguage) ?? 'en';
+    final lang = await UserPrefsService.getString('app_language');
+    state = lang ?? 'en';
   }
 
   Future<void> setLanguage(String lang) async {
     state = lang;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(ApiConstants.keyLanguage, lang);
+    await UserPrefsService.setString('app_language', lang);
   }
 }
 

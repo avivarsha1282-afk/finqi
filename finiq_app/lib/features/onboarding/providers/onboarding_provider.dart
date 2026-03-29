@@ -3,7 +3,7 @@ import '../../../models/chat_message_model.dart';
 import '../../../services/api_service.dart';
 import '../../language/providers/language_provider.dart';
 import '../../../core/constants/api_constants.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import '../../../services/user_prefs_service.dart';
 
 class OnboardingState {
   final List<ChatMessage> messages;
@@ -136,8 +136,7 @@ class OnboardingNotifier extends StateNotifier<OnboardingState> {
     } catch (_) {
       // Silently continue — data can be synced later
     }
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(ApiConstants.keyOnboardingComplete, true);
+    await UserPrefsService.setOnboardingComplete(true);
     state = state.copyWith(isComplete: true, isLoading: false);
   }
 

@@ -1,10 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import '../../../services/firebase_service.dart';
-import '../../../services/api_service.dart';
-import '../../../services/secure_storage_service.dart';
-import '../../../core/constants/api_constants.dart';
+import '../../../services/user_prefs_service.dart';
 
 // Stream of Firebase auth state
 final authStateProvider = StreamProvider<User?>((ref) {
@@ -27,17 +24,6 @@ class AuthController extends StateNotifier<AuthState> {
     state = state.copyWith(isLoading: true, error: null);
     try {
       final credential = await FirebaseService.instance.signInWithGoogle();
-
-      // Verify with backend and store onboarding state
-      try {
-        final result = await ApiService.instance.verifyAuth();
-        final onboardingComplete = result['onboarding_complete'] as bool? ?? false;
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setBool(ApiConstants.keyOnboardingComplete, onboardingComplete);
-      } catch (_) {
-        // Backend down — let router handle via Firebase isNewUser flag
-      }
-
       state = state.copyWith(isLoading: false);
       return FirebaseService.instance.isNewUser(credential);
     } on FirebaseAuthException catch (e) {
@@ -55,31 +41,10 @@ class AuthController extends StateNotifier<AuthState> {
     }
   }
 
-  Future<void> signInDemo() async {
-    state = state.copyWith(isLoading: true, error: null);
-    try {
-      await FirebaseService.instance.signInWithEmail(
-        ApiConstants.demoEmail,
-        ApiConstants.demoPassword,
-      );
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool(ApiConstants.keyOnboardingComplete, true);
-      state = state.copyWith(isLoading: false);
-    } catch (e) {
-      state = state.copyWith(
-        isLoading: false,
-        error: 'Demo login failed. Check Firebase console.',
-      );
-    }
-  }
-
   Future<void> signOut() async {
+    // Clear ALL UID-prefixed user data before signing out
+    await UserPrefsService.clearCurrentUserData();
     await FirebaseService.instance.signOut();
-    await SecureStorageService.instance.clearAll();
-    // Clear onboarding flag so next user starts fresh
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(ApiConstants.keyOnboardingComplete);
-    await prefs.remove(ApiConstants.keyLanguage);
   }
 }
 
