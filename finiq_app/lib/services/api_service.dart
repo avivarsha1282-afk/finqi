@@ -23,9 +23,9 @@ class ApiService {
 
   void init() {
     _dio = Dio(BaseOptions(
-      baseUrl: 'http://localhost:5000/api',
-      connectTimeout: const Duration(seconds: 15),
-      receiveTimeout: const Duration(seconds: 15),
+      baseUrl: '${ApiConstants.baseUrl}/api',
+      connectTimeout: const Duration(seconds: 60),
+      receiveTimeout: const Duration(seconds: 60),
       headers: {'Content-Type': 'application/json'},
     ));
 
@@ -74,7 +74,7 @@ class ApiService {
   // ─── Onboarding ───────────────────────────────────────────
   Future<Map<String, dynamic>> saveOnboarding(Map<String, dynamic> answers) async {
     try {
-      final res = await _dio.post('/user/onboarding', data: answers);
+      final res = await _dio.post('/onboarding/save', data: answers);
       return res.data as Map<String, dynamic>;
     } on DioException catch (e) {
       throw ApiException(_friendlyError(e), statusCode: e.response?.statusCode);
@@ -85,7 +85,7 @@ class ApiService {
   Future<HealthScoreModel> calculateScore() async {
     if (ApiConstants.demoMode) return HealthScoreModel.demo();
     try {
-      final res = await _dio.post('/data/calculate-score');
+      final res = await _dio.post('/score/calculate');
       return HealthScoreModel.fromJson(res.data as Map<String, dynamic>);
     } on DioException catch (_) {
       // Return demo model on error for hackathon reliability
@@ -101,7 +101,7 @@ class ApiService {
   }) async {
     if (ApiConstants.demoMode) return FirePlanModel.demo();
     try {
-      final res = await _dio.post('/data/fire-plan', data: {
+      final res = await _dio.post('/fire/plan', data: {
         'target_amount': targetAmount,
         'target_years': targetYears,
         'current_savings': currentSavings,
@@ -119,7 +119,7 @@ class ApiService {
   }) async {
     if (ApiConstants.demoMode) return TaxReportModel.demo();
     try {
-      final res = await _dio.post('/data/tax-compare', data: {
+      final res = await _dio.post('/tax/compare', data: {
         'annual_income': annualIncome,
         'deductions': deductions ?? {},
       });
@@ -171,7 +171,7 @@ class ApiService {
   // ─── Dashboard ─────────────────────────────────────────────
   Future<Map<String, dynamic>> getDashboard() async {
     try {
-      final res = await _dio.get('/data/dashboard');
+      final res = await _dio.get('/user/dashboard');
       return res.data as Map<String, dynamic>;
     } on DioException catch (e) {
       throw ApiException(_friendlyError(e));
@@ -179,9 +179,29 @@ class ApiService {
   }
 
   // ─── Generic PUT helper ────────────────────────────────────
-  Future<Map<String, dynamic>> put(String path, Map<String, dynamic> data) async {
+  Future<Map<String, dynamic>> putData(String path, Map<String, dynamic> data) async {
     try {
       final res = await _dio.put(path, data: data);
+      return res.data as Map<String, dynamic>;
+    } on DioException catch (e) {
+      throw ApiException(_friendlyError(e), statusCode: e.response?.statusCode);
+    }
+  }
+  
+  // ─── Profile Integration ────────────────────────────────────
+  Future<Map<String, dynamic>> updateProfile(Map<String, dynamic> data) async {
+    try {
+      final res = await _dio.put('/user/profile', data: data);
+      return res.data as Map<String, dynamic>;
+    } on DioException catch (e) {
+      throw ApiException(_friendlyError(e), statusCode: e.response?.statusCode);
+    }
+  }
+
+  // ─── Generic POST helper ────────────────────────────────────
+  Future<Map<String, dynamic>> postData(String path, Map<String, dynamic> data) async {
+    try {
+      final res = await _dio.post(path, data: data);
       return res.data as Map<String, dynamic>;
     } on DioException catch (e) {
       throw ApiException(_friendlyError(e), statusCode: e.response?.statusCode);

@@ -1,9 +1,11 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 import '../../../services/user_prefs_service.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/utils/currency_input_formatter.dart';
 import '../widgets/onboarding_shared.dart';
 
 class OnboardingStep2Screen extends StatefulWidget {
@@ -42,8 +44,8 @@ class _OnboardingStep2ScreenState extends State<OnboardingStep2Screen> {
     super.dispose();
   }
 
-  double get _income => double.tryParse(_salaryCtrl.text) ?? 0;
-  double get _expense => double.tryParse(_expenseCtrl.text) ?? 0;
+  double get _income => parseAmount(_salaryCtrl.text);
+  double get _expense => parseAmount(_expenseCtrl.text);
 
   Future<void> _next() async {
     if (!_formKey.currentState!.validate()) return;
@@ -52,9 +54,9 @@ class _OnboardingStep2ScreenState extends State<OnboardingStep2Screen> {
     data['monthly_income'] = _income;
     data['annual_income'] = _income * 12;
     data['monthly_expense'] = _expense;
-    data['monthly_rent'] = double.tryParse(_rentCtrl.text) ?? 0;
-    data['hra_received'] = double.tryParse(_hraCtrl.text) ?? 0;
-    data['annual_ctc'] = double.tryParse(_ctcCtrl.text) ?? 0;
+    data['monthly_rent'] = parseAmount(_rentCtrl.text);
+    data['hra_received'] = parseAmount(_hraCtrl.text);
+    data['annual_ctc'] = parseAmount(_ctcCtrl.text);
     await UserPrefsService.setString('onboarding_data', json.encode(data));
     if (mounted) context.go('/onboarding/step3');
   }
@@ -73,6 +75,7 @@ class _OnboardingStep2ScreenState extends State<OnboardingStep2Screen> {
                 padding: const EdgeInsets.all(20),
                 child: Form(
                   key: _formKey,
+                  autovalidateMode: AutovalidateMode.onUserInteraction,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -82,33 +85,38 @@ class _OnboardingStep2ScreenState extends State<OnboardingStep2Screen> {
                       const SizedBox(height: 32),
                       onboardingLabel('Monthly Take-Home Salary'),
                       TextFormField(controller: _salaryCtrl, keyboardType: TextInputType.number,
+                        inputFormatters: [FilteringTextInputFormatter.digitsOnly, CurrencyInputFormatter()],
                         style: const TextStyle(color: Colors.white),
                         decoration: onboardingInputDecoration('50,000', prefix: '₹ '),
                         onChanged: (_) => setState(() {}),
-                        validator: (v) { final val = double.tryParse(v ?? ''); return (val != null && val >= 5000) ? null : 'Min ₹5,000'; }),
+                        validator: (v) { final val = parseAmount(v); return (val >= 5000) ? null : 'Min ₹5,000'; }),
                       const SizedBox(height: 20),
                       if (_occupation == 'Salaried Employee') ...[
                         onboardingLabel('Annual CTC (optional)'),
                         TextFormField(controller: _ctcCtrl, keyboardType: TextInputType.number,
+                          inputFormatters: [FilteringTextInputFormatter.digitsOnly, CurrencyInputFormatter()],
                           style: const TextStyle(color: Colors.white),
                           decoration: onboardingInputDecoration('6,00,000', prefix: '₹ ')),
                         const SizedBox(height: 20),
                       ],
                       onboardingLabel('Monthly Total Expenses'),
                       TextFormField(controller: _expenseCtrl, keyboardType: TextInputType.number,
+                        inputFormatters: [FilteringTextInputFormatter.digitsOnly, CurrencyInputFormatter()],
                         style: const TextStyle(color: Colors.white),
                         decoration: onboardingInputDecoration('25,000', prefix: '₹ '),
                         onChanged: (_) => setState(() {}),
-                        validator: (v) => (double.tryParse(v ?? '') != null) ? null : 'Required'),
+                        validator: (v) => (parseAmount(v) > 0) ? null : 'Required'),
                       const SizedBox(height: 20),
                       onboardingLabel('Monthly House Rent Paid'),
                       TextFormField(controller: _rentCtrl, keyboardType: TextInputType.number,
+                        inputFormatters: [FilteringTextInputFormatter.digitsOnly, CurrencyInputFormatter()],
                         style: const TextStyle(color: Colors.white),
                         decoration: onboardingInputDecoration('0 if living with family', prefix: '₹ ')),
                       const SizedBox(height: 20),
                       if (_occupation == 'Salaried Employee') ...[
                         onboardingLabel('HRA Received Monthly'),
                         TextFormField(controller: _hraCtrl, keyboardType: TextInputType.number,
+                          inputFormatters: [FilteringTextInputFormatter.digitsOnly, CurrencyInputFormatter()],
                           style: const TextStyle(color: Colors.white),
                           decoration: onboardingInputDecoration('0 if not applicable', prefix: '₹ ')),
                         const SizedBox(height: 20),

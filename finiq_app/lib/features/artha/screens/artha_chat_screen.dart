@@ -2,8 +2,9 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:http/http.dart' as http;
-import '../../../core/constants/api_constants.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import '../../../services/api_service.dart';
+
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../models/chat_message_model.dart';
@@ -42,13 +43,20 @@ class _ArthaChatScreenState extends ConsumerState<ArthaChatScreen> {
   @override
   void initState() {
     super.initState();
-    // Welcome message
-    _messages.add(ChatMessage.artha(
-      'Hi! I\'m Artha, your AI financial mentor 🧠\n\n'
-      'I can help you with investments, tax planning, insurance, and FIRE goals. '
-      'Ask me anything about your finances!\n\n'
-      '⚠️ I provide financial education, not SEBI-registered investment advice.',
-    ));
+    _loadHistory();
+  }
+
+  Future<void> _loadHistory() async {
+    
+    // Welcome message if no history
+    setState(() {
+      _messages.add(ChatMessage.artha(
+        'Hi! I\'m Artha, your AI financial mentor 🧠\n\n'
+        'I can help you with investments, tax planning, insurance, and FIRE goals. '
+        'Ask me anything about your finances!\n\n'
+        '⚠️ I provide financial education, not SEBI-registered investment advice.',
+      ));
+    });
   }
 
   @override
@@ -74,93 +82,37 @@ class _ArthaChatScreenState extends ConsumerState<ArthaChatScreen> {
     if (text.trim().isEmpty) return;
     _controller.clear();
 
+    final userMsg = ChatMessage.user(text);
     setState(() {
-      _messages.add(ChatMessage.user(text));
+      _messages.add(userMsg);
       _isTyping = true;
     });
     _scrollToBottom();
+    
+    // Chat is persisted server-side in MongoDB via /chat/message
 
     try {
       final userProfile = await UserDataService.getUserProfile();
       final lang = ref.read(languageProvider);
 
-      final systemPrompt = '''You are Artha, a friendly and knowledgeable Indian financial mentor inside the FinIQ app.
-
-USER PROFILE:
-- Name: ${userProfile['name'] ?? 'User'}
-- Age: ${userProfile['age'] ?? 25}
-- City: ${userProfile['city'] ?? 'India'}
-- Occupation: ${userProfile['occupation'] ?? 'Salaried'}
-- Annual Income: ₹${userProfile['annual_income'] ?? 500000}
-- Monthly Expenses: ₹${userProfile['monthly_expense'] ?? 25000}
-- Current Savings: ₹${userProfile['current_savings'] ?? 0}
-- Risk Appetite: ${userProfile['risk_appetite'] ?? 'Moderate'}
-- Goal: ${userProfile['goal_type'] ?? 'Build Wealth'} (₹${userProfile['goal_amount'] ?? 5000000} in ${userProfile['goal_years'] ?? 7} years)
-
-RULES:
-1. Respond in ${lang == 'hi' ? 'Hindi (Devanagari script)' : 'English'}.
-2. Use Indian financial context (₹, lakhs, crores, Indian tax laws, SEBI, RBI).
-3. Give specific, actionable advice with numbers when possible.
-4. Use emojis occasionally for friendliness.
-5. Keep responses concise (2-4 paragraphs max).
-6. Always end with a disclaimer: "This is financial education, not SEBI-registered advice."
-7. Reference the user\'s actual financial data when relevant.
-8. Use Indian number formatting (e.g., ₹1,50,000 not ₹150,000).''';
-
-      // Build conversation history for Gemini
-      final contents = <Map<String, dynamic>>[];
-      for (final msg in _messages.where((m) => !m.isLoading && m.content.isNotEmpty)) {
-        contents.add({
-          'role': msg.isUser ? 'user' : 'model',
-          'parts': [{'text': msg.content}],
-        });
-      }
-
-      final body = json.encode({
-        'system_instruction': {'parts': [{'text': systemPrompt}]},
-        'contents': contents,
-        'generationConfig': {
-          'temperature': 0.7,
-          'topP': 0.9,
-          'maxOutputTokens': 1024,
-        },
-      });
-
-      final response = await http.post(
-        Uri.parse('${ApiConstants.geminiEndpoint}?key=${ApiConstants.geminiApiKey}'),
-        headers: {'Content-Type': 'application/json'},
-        body: body,
+      final replyMsg = await ApiService.instance.sendMessage(
+        message: text,
+        history: _messages, 
+        language: lang,
+        userContext: userProfile,
       );
 
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        final reply = data['candidates']?[0]?['content']?['parts']?[0]?['text'] ?? 'I couldn\'t generate a response. Please try again.';
-        setState(() {
-          _isTyping = false;
-          _messages.add(ChatMessage.artha(reply));
-        });
-      } else if (response.statusCode == 429) {
-        setState(() {
-          _isTyping = false;
-          _messages.add(ChatMessage.artha(
-            'I\'m getting too many requests right now. Please wait a moment and try again 🙏\n\n'
-            'This is financial education, not SEBI-registered advice.',
-          ));
-        });
-      } else {
-        setState(() {
-          _isTyping = false;
-          _messages.add(ChatMessage.artha(
-            'Sorry, I had trouble connecting (Error ${response.statusCode}). '
-            'Please check your internet and try again.',
-          ));
-        });
-      }
+      setState(() {
+        _isTyping = false;
+        _messages.add(replyMsg);
+      });
+      
+      // Reply persisted server-side in MongoDB
     } catch (e) {
       setState(() {
         _isTyping = false;
         _messages.add(ChatMessage.artha(
-          'Detailed Error Payload:\n$e\n\nPlease check your internet connection or API settings.',
+          'Whoops! Something went wrong:\n$e\n\nPlease try again.',
         ));
       });
     }

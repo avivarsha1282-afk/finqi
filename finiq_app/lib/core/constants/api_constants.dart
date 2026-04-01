@@ -1,21 +1,34 @@
+import 'package:flutter/foundation.dart';
+
 class ApiConstants {
   ApiConstants._();
 
-  /// Demo mode ON — all data from UserDataService, no Flask backend needed.
-  static const bool demoMode = true;
+  // ── ENVIRONMENTS ────────────────────────────────────
+  static const String _railway =
+      'https://finiq-backend-production.up.railway.app';
 
-  // Gemini API (direct from Flutter — no Flask backend)
-  static const String geminiApiKey = 'AIzaSyBLMkfl11n2o0-1hZIZx94To-q_W_B_vKY';
-  static const String geminiEndpoint =
-      'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
+  // Physical device via ADB reverse tunnel: 127.0.0.1
+  // Run: adb reverse tcp:5000 tcp:5000
+  static const String _local = 'http://127.0.0.1:5000';
 
-  // SharedPreferences keys
-  static const String keyLanguage = 'app_language';
-  static const String keyOnboardingComplete = 'onboarding_complete';
-  static const String keyUserProfile = 'user_profile';
-  static const String keyOnboardingData = 'onboarding_data';
+  // Auto-switch: Release build → Railway, Debug → Railway (change to _local if running Flask locally)
+  static String get baseUrl => _railway;
 
-  // Demo account (for Firebase email login fallback)
-  static const String demoEmail = 'demo@finiq.app';
-  static const String demoPassword = 'FinIQ@Demo2026';
+  // ── ENDPOINTS ───────────────────────────────────────
+  static const String onboardingSave = '/api/onboarding/save';
+  static const String dashboard = '/api/user/dashboard';
+  static const String healthScore = '/api/score/calculate';
+  static const String firePlan = '/api/fire/plan';
+  static const String taxCompare = '/api/tax/compare';
+  static const String chatMessage = '/api/chat/message';
+  static const String expenseAnalyse = '/api/expenses/analyse';
+  static const String smartBuyCompare = '/api/smart-buy/compare';
+  static const String ping = '/ping';
+
+  // ── TIMEOUTS ────────────────────────────────────────
+  static const int connectTimeoutSec = 10;
+  static const int receiveTimeoutSec = 30;
+
+  // Demo mode — should ALWAYS be false for production
+  static const bool demoMode = false;
 }

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../services/user_prefs_service.dart';
 import '../../../services/user_data_service.dart';
+import '../../../core/utils/indian_number_format.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../features/onboarding/widgets/onboarding_shared.dart';
@@ -42,22 +43,26 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> with Sing
   }
 
   Future<void> _loadData() async {
-    final raw = (await UserPrefsService.getString('onboarding_data')) ?? '{}';
-    final data = json.decode(raw) as Map<String, dynamic>;
+    final profile = await UserDataService.getUserProfile();
     setState(() {
-      _data = data;
+      _data = profile.cast<String, dynamic>();
       _loaded = true;
-      _nameCtrl.text = data['name'] ?? '';
-      _ageCtrl.text = (data['age'] ?? '').toString();
-      _cityCtrl.text = data['city'] ?? '';
-      _occupation = data['occupation'] ?? 'Salaried Employee';
-      _incomeCtrl.text = (data['monthly_income'] ?? '').toString();
-      _expenseCtrl.text = (data['monthly_expense'] ?? '').toString();
-      _savingsCtrl.text = (data['current_savings'] ?? '').toString();
-      _goalAmountCtrl.text = (data['goal_amount'] ?? '').toString();
-      _goalYearsCtrl.text = (data['goal_years'] ?? '').toString();
-      _riskAppetite = data['risk_appetite'] ?? 'Moderate';
-      _goalType = data['goal_type'] ?? 'Build Wealth';
+      _nameCtrl.text = _data['name'] ?? '';
+      _ageCtrl.text = (_data['age'] ?? '').toString();
+      _cityCtrl.text = _data['city'] ?? '';
+      _occupation = _data['occupation'] ?? 'Salaried Employee';
+
+      double getNum(String key) => (_data[key] is num) ? (_data[key] as num).toDouble() : 0.0;
+
+      // Only format values that are strictly numbers representing money
+      _incomeCtrl.text = IndianNumberFormat.formatFull(getNum('monthly_income'));
+      _expenseCtrl.text = IndianNumberFormat.formatFull(getNum('monthly_expense'));
+      _savingsCtrl.text = IndianNumberFormat.formatFull(getNum('current_savings'));
+      _goalAmountCtrl.text = IndianNumberFormat.formatFull(getNum('goal_amount'));
+      _goalYearsCtrl.text = (_data['goal_years'] ?? 7).toString();
+      
+      _riskAppetite = _data['risk_appetite'] ?? 'Moderate';
+      _goalType = _data['goal_type'] ?? 'Build Wealth';
     });
   }
 
@@ -66,11 +71,11 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> with Sing
     _data['age'] = int.tryParse(_ageCtrl.text) ?? 25;
     _data['city'] = _cityCtrl.text.trim();
     _data['occupation'] = _occupation;
-    _data['monthly_income'] = double.tryParse(_incomeCtrl.text) ?? 0;
-    _data['annual_income'] = (double.tryParse(_incomeCtrl.text) ?? 0) * 12;
-    _data['monthly_expense'] = double.tryParse(_expenseCtrl.text) ?? 0;
-    _data['current_savings'] = double.tryParse(_savingsCtrl.text) ?? 0;
-    _data['goal_amount'] = double.tryParse(_goalAmountCtrl.text) ?? 0;
+    _data['monthly_income'] = IndianNumberFormat.parse(_incomeCtrl.text) ?? 0;
+    _data['annual_income'] = (IndianNumberFormat.parse(_incomeCtrl.text) ?? 0) * 12;
+    _data['monthly_expense'] = IndianNumberFormat.parse(_expenseCtrl.text) ?? 0;
+    _data['current_savings'] = IndianNumberFormat.parse(_savingsCtrl.text) ?? 0;
+    _data['goal_amount'] = IndianNumberFormat.parse(_goalAmountCtrl.text) ?? 0;
     _data['goal_years'] = int.tryParse(_goalYearsCtrl.text) ?? 7;
     _data['risk_appetite'] = _riskAppetite;
     _data['goal_type'] = _goalType;
@@ -137,7 +142,9 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> with Sing
   Widget _personalTab() {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
-      child: Column(
+      child: Form(
+        autovalidateMode: AutovalidateMode.onUserInteraction,
+        child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           onboardingLabel('Full Name'),
@@ -167,6 +174,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> with Sing
           ),
           const SizedBox(height: 40),
         ],
+        ),
       ),
     );
   }
@@ -174,7 +182,9 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> with Sing
   Widget _financialTab() {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
-      child: Column(
+      child: Form(
+        autovalidateMode: AutovalidateMode.onUserInteraction,
+        child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           onboardingLabel('Monthly Income'),
@@ -240,6 +250,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> with Sing
           ),
           const SizedBox(height: 40),
         ],
+        ),
       ),
     );
   }

@@ -25,7 +25,7 @@ def chat_message():
     profile = user.get('profile', {}) if user else {}
     user_name = user.get('name', 'there') if user else 'there'
 
-    # Build rich context — Artha can now reference the user's real numbers
+    # Build rich context using CORRECT field names (matching onboarding.py)
     user_context = {
         'name': user_name,
         'age': profile.get('age'),
@@ -38,32 +38,40 @@ def chat_message():
         'section_80c': profile.get('section_80c', 0),
         'premium_80d': profile.get('premium_80d', 0),
         'nps_contribution': profile.get('nps_contribution', 0),
-        'financial_goal': profile.get('financial_goal', ''),
-        'financial_goal_amount': profile.get('financial_goal_amount'),
-        'target_timeline': profile.get('target_timeline'),
+        'goal_name': profile.get('financial_goal', profile.get('goal_name', '')),
+        'goal_amount': profile.get('financial_goal_amount', profile.get('goal_amount')),
+        'goal_years': profile.get('target_timeline', profile.get('goal_years')),
         'risk_appetite': profile.get('risk_appetite', 'moderate'),
     }
+
+    # Also merge any context sent from Flutter (has more recent local data)
+    flutter_context = data.get('user_context', {})
+    if flutter_context:
+        for key, val in flutter_context.items():
+            if val is not None and val != '' and val != 0:
+                user_context[key] = val
 
     try:
         reply = get_artha_response(message, history, user_context, language)
 
         # Persist chat session in MongoDB
-        chat_sessions_collection.update_one(
-            {'firebase_uid': uid},
-            {
-                '$push': {
-                    'messages': {'$each': [
-                        {'role': 'user', 'content': message, 'timestamp': datetime.utcnow()},
-                        {'role': 'assistant', 'content': reply, 'timestamp': datetime.utcnow()}
-                    ]}
+        if chat_sessions_collection is not None:
+            chat_sessions_collection.update_one(
+                {'firebase_uid': uid},
+                {
+                    '$push': {
+                        'messages': {'$each': [
+                            {'role': 'user', 'content': message, 'timestamp': datetime.utcnow()},
+                            {'role': 'assistant', 'content': reply, 'timestamp': datetime.utcnow()}
+                        ]}
+                    },
+                    '$set': {
+                        'last_message_at': datetime.utcnow(),
+                        'firebase_uid': uid,
+                    }
                 },
-                '$set': {
-                    'last_message_at': datetime.utcnow(),
-                    'firebase_uid': uid,
-                }
-            },
-            upsert=True
-        )
+                upsert=True
+            )
 
         return jsonify({
             'content': reply,
@@ -73,4 +81,3 @@ def chat_message():
     except Exception as e:
         print(f"Chat Error for uid={uid}: {e}")
         return jsonify({'error': 'Artha is busy right now. Please try again.'}), 500
-

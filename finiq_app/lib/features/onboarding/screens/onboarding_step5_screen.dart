@@ -1,9 +1,11 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 import '../../../services/user_prefs_service.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/utils/currency_input_formatter.dart';
 import '../widgets/onboarding_shared.dart';
 
 class OnboardingStep5Screen extends StatefulWidget {
@@ -49,9 +51,9 @@ class _OnboardingStep5ScreenState extends State<OnboardingStep5Screen> {
     final data = json.decode(raw) as Map<String, dynamic>;
     data['goal_type'] = _goalType;
     data['goal_name'] = _goalNameCtrl.text.trim();
-    data['goal_amount'] = double.tryParse(_goalAmountCtrl.text) ?? 15200000;
+    data['goal_amount'] = parseAmount(_goalAmountCtrl.text);
     data['goal_years'] = _goalYears.toInt();
-    data['goal_savings'] = double.tryParse(_goalSavingsCtrl.text) ?? 0;
+    data['goal_savings'] = parseAmount(_goalSavingsCtrl.text);
     data['risk_appetite'] = _riskAppetite;
     await UserPrefsService.setString('onboarding_data', json.encode(data));
     if (mounted) context.go('/onboarding/processing');
@@ -70,6 +72,7 @@ class _OnboardingStep5ScreenState extends State<OnboardingStep5Screen> {
                 padding: const EdgeInsets.all(20),
                 child: Form(
                   key: _formKey,
+                  autovalidateMode: AutovalidateMode.onUserInteraction,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -123,9 +126,10 @@ class _OnboardingStep5ScreenState extends State<OnboardingStep5Screen> {
                         const SizedBox(height: 16),
                         onboardingLabel('Target Amount'),
                         TextFormField(controller: _goalAmountCtrl, keyboardType: TextInputType.number,
+                          inputFormatters: [FilteringTextInputFormatter.digitsOnly, CurrencyInputFormatter()],
                           style: const TextStyle(color: Colors.white),
                           decoration: onboardingInputDecoration('1,52,00,000', prefix: '₹ '),
-                          validator: (v) => (double.tryParse(v ?? '') != null) ? null : 'Required'),
+                          validator: (v) => (parseAmount(v) > 0) ? null : 'Required'),
                         const SizedBox(height: 16),
                         Row(
                           children: [
@@ -140,6 +144,7 @@ class _OnboardingStep5ScreenState extends State<OnboardingStep5Screen> {
                         const SizedBox(height: 16),
                         onboardingLabel('Current savings toward this goal'),
                         TextFormField(controller: _goalSavingsCtrl, keyboardType: TextInputType.number,
+                          inputFormatters: [FilteringTextInputFormatter.digitsOnly, CurrencyInputFormatter()],
                           style: const TextStyle(color: Colors.white),
                           decoration: onboardingInputDecoration('0', prefix: '₹ ')),
                       ],

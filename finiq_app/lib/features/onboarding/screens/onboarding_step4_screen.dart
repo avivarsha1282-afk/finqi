@@ -1,9 +1,11 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 import '../../../services/user_prefs_service.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/utils/currency_input_formatter.dart';
 import '../widgets/onboarding_shared.dart';
 
 class OnboardingStep4Screen extends StatefulWidget {
@@ -46,7 +48,7 @@ class _OnboardingStep4ScreenState extends State<OnboardingStep4Screen> {
     super.dispose();
   }
 
-  double _val(TextEditingController c) => double.tryParse(c.text) ?? 0;
+  double _val(TextEditingController c) => parseAmount(c.text);
   double get _totalEmi => _val(_homeLoanCtrl) + _val(_carLoanCtrl) + _val(_personalLoanCtrl) + _val(_eduLoanCtrl);
   double get _dtiRatio => _monthlyIncome > 0 ? (_totalEmi / _monthlyIncome * 100) : 0;
 
@@ -97,6 +99,7 @@ class _OnboardingStep4ScreenState extends State<OnboardingStep4Screen> {
                     if (_hasHealthIns) ...[
                       const SizedBox(height: 8),
                       TextFormField(controller: _healthCoverCtrl, keyboardType: TextInputType.number,
+                        inputFormatters: [FilteringTextInputFormatter.digitsOnly, CurrencyInputFormatter()],
                         style: const TextStyle(color: Colors.white),
                         decoration: onboardingInputDecoration('Cover amount', prefix: '₹ ')),
                     ] else ...[
@@ -109,6 +112,7 @@ class _OnboardingStep4ScreenState extends State<OnboardingStep4Screen> {
                     if (_hasTermIns) ...[
                       const SizedBox(height: 8),
                       TextFormField(controller: _termCoverCtrl, keyboardType: TextInputType.number,
+                        inputFormatters: [FilteringTextInputFormatter.digitsOnly, CurrencyInputFormatter()],
                         style: const TextStyle(color: Colors.white),
                         decoration: onboardingInputDecoration('Sum assured', prefix: '₹ ')),
                     ],
@@ -183,6 +187,7 @@ class _OnboardingStep4ScreenState extends State<OnboardingStep4Screen> {
           Text(label, style: const TextStyle(color: AppColors.textSecondary, fontSize: 12, fontWeight: FontWeight.w500)),
           const SizedBox(height: 6),
           TextFormField(controller: ctrl, keyboardType: TextInputType.number,
+            inputFormatters: [FilteringTextInputFormatter.digitsOnly, CurrencyInputFormatter()],
             style: const TextStyle(color: Colors.white),
             decoration: onboardingInputDecoration('0', prefix: '₹ '),
             onChanged: (_) => setState(() {})),

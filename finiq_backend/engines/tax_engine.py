@@ -21,7 +21,7 @@ def calculate_tax_new(income):
     return _apply_slabs(taxable, NEW_REGIME_SLABS)
 
 def calculate_tax_old(income, deductions):
-    std_deduction = 75000
+    std_deduction = 50000
     total_deductions = std_deduction + deductions
     taxable = max(0, income - total_deductions)
     return _apply_slabs(taxable, OLD_REGIME_SLABS)
@@ -40,6 +40,24 @@ def _apply_slabs(taxable_income, slabs):
 
 def compare_regimes(income, investment_80c=0, premium_80d=0,
                     nps_contribution=0, hra=0):
+    if income < 300000:
+        return {
+            'old_regime': {
+                'total_tax': 0,
+                'effective_rate': 0,
+                'total_deductions': 0
+            },
+            'new_regime': {
+                'total_tax': 0,
+                'effective_rate': 0
+            },
+            'recommended_regime': 'new',
+            'tax_saving_by_switching': 0,
+            'missed_deductions': [],
+            'total_potential_saving': 0,
+            'below_threshold': True
+        }
+
     total_deductions = (min(investment_80c, 150000) + 
                        min(premium_80d, 25000) + 
                        min(nps_contribution, 50000) + hra)
@@ -94,5 +112,6 @@ def compare_regimes(income, investment_80c=0, premium_80d=0,
         'recommended_regime': recommended,
         'tax_saving_by_switching': saving,
         'missed_deductions': missed_deductions,
-        'total_potential_saving': total_potential_saving
+        'total_potential_saving': total_potential_saving,
+        'below_threshold': False
     }

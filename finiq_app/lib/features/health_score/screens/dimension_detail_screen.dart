@@ -3,11 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:http/http.dart' as http;
 import 'package:share_plus/share_plus.dart';
-import '../../../core/constants/api_constants.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
+import '../../../services/api_service.dart';
 import '../../../services/user_data_service.dart';
 import '../../language/providers/language_provider.dart';
 import '../providers/score_provider.dart';
@@ -83,22 +82,16 @@ Be direct, warm, specific. Use Indian finance terms.
 Do not use markdown. Plain text only.
 ''';
 
-      final response = await http.post(
-        Uri.parse('${ApiConstants.geminiEndpoint}?key=${ApiConstants.geminiApiKey}'),
-        headers: {'Content-Type': 'application/json'},
-        body: json.encode({
-          'contents': [{'role': 'user', 'parts': [{'text': prompt}]}],
-          'generationConfig': {'temperature': 0.5, 'maxOutputTokens': 100},
-        }),
-      ).timeout(const Duration(seconds: 10));
+      final msg = await ApiService.instance.sendMessage(
+        message: prompt,
+        history: [],
+        language: 'en',
+      );
 
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        final text = data['candidates']?[0]?['content']?['parts']?[0]?['text'] ?? '';
-        if (text.isNotEmpty && mounted) {
-          setState(() { _arthaAnalysis = text; _isLoadingAnalysis = false; });
-          return;
-        }
+      final text = msg.content;
+      if (text.isNotEmpty && mounted) {
+        setState(() { _arthaAnalysis = text; _isLoadingAnalysis = false; });
+        return;
       }
     } catch (_) {}
 

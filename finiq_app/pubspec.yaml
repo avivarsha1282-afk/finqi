@@ -48,6 +48,17 @@ dependencies:
   # UI
   cached_network_image: ^3.4.1
   flutter_svg: ^2.0.10+1
+  cloud_firestore: ^5.6.12
+  flutter_markdown: ^0.7.7+1
+
+  # Smart Buy Lens
+  image_picker: ^1.1.2
+  permission_handler: ^11.3.1
+
+  # Offline Caching
+  hive_flutter: ^1.1.0
+  hive: ^2.2.3
+  path_provider: ^2.1.4
 
 dev_dependencies:
   flutter_test:

@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'app.dart';
+import 'services/api_service.dart';
+import 'services/cache_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -23,6 +25,12 @@ void main() async {
 
   // Firebase
   await Firebase.initializeApp();
+
+  // Hive offline cache
+  await CacheService.init();
+
+  // Initialize API service
+  ApiService.instance.init();
 
   runApp(
     const ProviderScope(

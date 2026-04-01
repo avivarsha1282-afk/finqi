@@ -1,9 +1,11 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 import '../../../services/user_prefs_service.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/utils/currency_input_formatter.dart';
 import '../widgets/onboarding_shared.dart';
 
 class OnboardingStep3Screen extends StatefulWidget {
@@ -32,7 +34,7 @@ class _OnboardingStep3ScreenState extends State<OnboardingStep3Screen> {
     super.dispose();
   }
 
-  double _val(TextEditingController c) => double.tryParse(c.text) ?? 0;
+  double _val(TextEditingController c) => parseAmount(c.text);
 
   double get _totalSavings => _val(_savingsCtrl) + _val(_fdCtrl) + _val(_mfCtrl) + _val(_stocksCtrl) +
       _val(_ppfCtrl) + _val(_npsCtrl) + _val(_goldCtrl) + _val(_otherCtrl);
@@ -82,6 +84,7 @@ class _OnboardingStep3ScreenState extends State<OnboardingStep3Screen> {
                 TextFormField(
                   controller: ctrl,
                   keyboardType: TextInputType.number,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly, CurrencyInputFormatter()],
                   style: const TextStyle(color: Colors.white),
                   decoration: onboardingInputDecoration('0', prefix: '₹ '),
                   onChanged: (_) => setState(() {}),
@@ -133,6 +136,7 @@ class _OnboardingStep3ScreenState extends State<OnboardingStep3Screen> {
                     const SizedBox(height: 12),
                     onboardingLabel('Annual 80C investment (ELSS, PPF, LIC combined)'),
                     TextFormField(controller: _sec80cCtrl, keyboardType: TextInputType.number,
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly, CurrencyInputFormatter()],
                       style: const TextStyle(color: Colors.white),
                       decoration: onboardingInputDecoration('0', prefix: '₹ ')),
                     const SizedBox(height: 4),
@@ -140,11 +144,13 @@ class _OnboardingStep3ScreenState extends State<OnboardingStep3Screen> {
                     const SizedBox(height: 16),
                     onboardingLabel('Health Insurance Premium (80D)'),
                     TextFormField(controller: _sec80dCtrl, keyboardType: TextInputType.number,
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly, CurrencyInputFormatter()],
                       style: const TextStyle(color: Colors.white),
                       decoration: onboardingInputDecoration('0', prefix: '₹ ')),
                     const SizedBox(height: 16),
                     onboardingLabel('Annual NPS Contribution'),
                     TextFormField(controller: _npsAnnualCtrl, keyboardType: TextInputType.number,
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly, CurrencyInputFormatter()],
                       style: const TextStyle(color: Colors.white),
                       decoration: onboardingInputDecoration('0', prefix: '₹ ')),
 

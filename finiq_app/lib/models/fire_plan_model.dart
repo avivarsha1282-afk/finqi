@@ -26,23 +26,40 @@ class FirePlanModel {
   });
 
   factory FirePlanModel.fromJson(Map<String, dynamic> json) {
+    // Parse timeline/growth_data — backend sends 'timeline', model uses growthData
+    final rawTimeline = json['timeline'] ?? json['growth_data'] ?? [];
+    final growthData = (rawTimeline as List<dynamic>)
+        .map((d) => ChartDataPoint.fromJson(d as Map<String, dynamic>))
+        .toList();
+
+    // Parse asset allocation — backend sends 'type'/'color', model uses 'name'/'color_hex'
+    final rawAlloc = json['asset_allocation'] ?? [];
+    final allocation = (rawAlloc as List<dynamic>)
+        .map((a) => AssetAllocation.fromJson(a as Map<String, dynamic>))
+        .toList();
+
+    // Parse scenarios
+    final rawScenarios = json['scenarios'] ?? [];
+    final scenarios = (rawScenarios as List<dynamic>)
+        .map((s) => FireScenario.fromJson(s as Map<String, dynamic>))
+        .toList();
+
     return FirePlanModel(
-      targetCorpus: (json['target_corpus'] ?? 15200000).toDouble(),
+      targetCorpus: (json['target_amount'] ?? json['target_corpus'] ?? 15200000).toDouble(),
       targetYears: json['target_years'] ?? 7,
       currentSavings: (json['current_savings'] ?? 200000).toDouble(),
-      requiredMonthlySip: (json['required_sip'] ?? 180000).toDouble(),
-      projectedCorpus: (json['projected_corpus'] ?? 15200000).toDouble(),
-      estimatedReturn: (json['estimated_return'] ?? 14.2).toDouble(),
-      scenarios: (json['scenarios'] as List<dynamic>? ?? [])
-          .map((s) => FireScenario.fromJson(s))
-          .toList(),
-      assetAllocation: (json['asset_allocation'] as List<dynamic>? ?? [])
-          .map((a) => AssetAllocation.fromJson(a))
-          .toList(),
+      requiredMonthlySip: (json['required_monthly_sip'] ?? json['required_sip'] ?? 180000).toDouble(),
+      projectedCorpus: (json['target_amount'] ?? json['projected_corpus'] ?? 15200000).toDouble(),
+      estimatedReturn: (json['annual_return'] ?? json['estimated_return'] ?? 14.2).toDouble(),
+      scenarios: scenarios,
+      assetAllocation: allocation.isNotEmpty ? allocation : [
+        AssetAllocation(name: 'Equity', percentage: 40, colorHex: '#00C896'),
+        AssetAllocation(name: 'Index Funds', percentage: 30, colorHex: '#3B82F6'),
+        AssetAllocation(name: 'Gold / Debt', percentage: 20, colorHex: '#F59E0B'),
+        AssetAllocation(name: 'Intl. Funds', percentage: 10, colorHex: '#8B5CF6'),
+      ],
       arthaMessage: json['artha_message'] ?? '',
-      growthData: (json['growth_data'] as List<dynamic>? ?? [])
-          .map((d) => ChartDataPoint.fromJson(d))
-          .toList(),
+      growthData: growthData,
       achievability: json['achievability'] ?? 'ACHIEVABLE',
     );
   }
@@ -88,12 +105,13 @@ class FireScenario {
   });
 
   factory FireScenario.fromJson(Map<String, dynamic> json) {
+    final risk = json['risk'] ?? 'MODERATE';
     return FireScenario(
       years: json['years'] ?? 7,
       label: json['label'] ?? '',
-      monthlySip: (json['monthly_sip'] ?? 0).toDouble(),
-      risk: json['risk'] ?? 'MODERATE',
-      isRecommended: json['is_recommended'] ?? false,
+      monthlySip: (json['required_sip'] ?? json['monthly_sip'] ?? 0).toDouble(),
+      risk: risk,
+      isRecommended: json['is_recommended'] ?? risk == 'RECOMMENDED',
     );
   }
 }
@@ -110,10 +128,13 @@ class AssetAllocation {
   });
 
   factory AssetAllocation.fromJson(Map<String, dynamic> json) {
+    // Backend sends 'type' and 'color' (hex without #), model uses 'name' and 'color_hex'
+    final rawColor = json['color_hex'] ?? json['color'] ?? '00C896';
+    final colorHex = rawColor.startsWith('#') ? rawColor : '#$rawColor';
     return AssetAllocation(
-      name: json['name'] ?? '',
+      name: json['name'] ?? json['type'] ?? '',
       percentage: (json['percentage'] ?? 0).toDouble(),
-      colorHex: json['color_hex'] ?? '#00C896',
+      colorHex: colorHex,
     );
   }
 }

@@ -47,6 +47,16 @@ class HealthScoreScreen extends ConsumerWidget {
         title: Text(lang == 'hi' ? 'वित्तीय स्वास्थ्य' : 'Financial Health', style: AppTextStyles.subheading),
         actions: [
           IconButton(
+            icon: const Icon(Icons.refresh_rounded, size: 20, color: AppColors.primaryTeal),
+            tooltip: 'Refresh',
+            onPressed: () {
+              ref.invalidate(scoreProvider);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Refreshing health score...'), backgroundColor: AppColors.primaryTeal, duration: Duration(seconds: 1)),
+              );
+            },
+          ),
+          IconButton(
             icon: const Icon(Icons.share_rounded, size: 20),
             onPressed: () {
               Share.share('🏥 My FinIQ Health Score: ${score.totalScore}/100 (Grade ${score.grade})\n'

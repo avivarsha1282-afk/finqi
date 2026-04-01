@@ -5,7 +5,9 @@ import 'package:share_plus/share_plus.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/utils/currency_formatter.dart';
-import '../../../services/mock_data_service.dart';
+import '../../../models/tax_report_model.dart';
+import '../../../services/api_service.dart';
+import '../../../services/user_data_service.dart';
 import '../../language/providers/language_provider.dart';
 
 class TaxWizardScreen extends ConsumerStatefulWidget {
@@ -14,8 +16,41 @@ class TaxWizardScreen extends ConsumerStatefulWidget {
 }
 
 class _TaxWizardScreenState extends ConsumerState<TaxWizardScreen> {
-  double _income = 5000000;
-  final _incomeCtrl = TextEditingController(text: '5000000');
+  double _income = 0;
+  final _incomeCtrl = TextEditingController();
+  TaxReportModel? _report;
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadInitialData();
+  }
+
+  Future<void> _loadInitialData() async {
+    final profile = await UserDataService.getUserProfile();
+    final realIncome = profile['annual_income']?.toDouble() ?? 5000000.0;
+    _incomeCtrl.text = realIncome.toInt().toString();
+    _setIncome(realIncome);
+  }
+
+  void _setIncome(double v) {
+    setState(() {
+      _income = v;
+      _isLoading = true;
+    });
+    _fetchReport(v);
+  }
+
+  Future<void> _fetchReport(double inc) async {
+    final report = await ApiService.instance.compareTax(annualIncome: inc);
+    if (mounted) {
+      setState(() {
+        _report = report;
+        _isLoading = false;
+      });
+    }
+  }
 
   @override
   void dispose() {
@@ -26,13 +61,6 @@ class _TaxWizardScreenState extends ConsumerState<TaxWizardScreen> {
   @override
   Widget build(BuildContext context) {
     final lang = ref.watch(languageProvider);
-    final report = MockDataService.getTaxReport(annualIncome: _income);
-
-    final oldTax = report.oldRegime.taxPayable;
-    final newTax = report.newRegime.taxPayable;
-    final saving = (oldTax - newTax).abs();
-    final isOldBetter = report.isOldRegimeBetter;
-    final maxTax = oldTax > newTax ? oldTax : newTax;
 
     return Scaffold(
       backgroundColor: AppColors.backgroundColor,
@@ -40,13 +68,24 @@ class _TaxWizardScreenState extends ConsumerState<TaxWizardScreen> {
         title: Text(lang == 'hi' ? 'टैक्स तुलना' : 'Tax Wizard', style: AppTextStyles.subheading),
         actions: [
           IconButton(
+            icon: const Icon(Icons.refresh_rounded, size: 20, color: AppColors.primaryTeal),
+            tooltip: 'Refresh',
+            onPressed: () {
+              _setIncome(_income);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Refreshing tax comparison...'), backgroundColor: AppColors.primaryTeal, duration: Duration(seconds: 1)),
+              );
+            },
+          ),
+          IconButton(
             icon: const Icon(Icons.share_rounded, size: 20),
             onPressed: () {
+              if (_report == null) return;
               Share.share('💰 My Tax Comparison (FinIQ)\n'
                   'Income: ${CurrencyFormatter.compact(_income)}\n'
-                  'Old Regime: ${CurrencyFormatter.compact(oldTax)}\n'
-                  'New Regime: ${CurrencyFormatter.compact(newTax)}\n'
-                  'Recommended: ${isOldBetter ? "Old" : "New"} Regime\n\n'
+                  'Old Regime: ${CurrencyFormatter.compact(_report!.oldRegime.taxPayable)}\n'
+                  'New Regime: ${CurrencyFormatter.compact(_report!.newRegime.taxPayable)}\n'
+                  'Recommended: ${_report!.isOldRegimeBetter ? "Old" : "New"} Regime\n\n'
                   'Compare your tax with FinIQ! 📊');
             },
           ),
@@ -73,6 +112,7 @@ class _TaxWizardScreenState extends ConsumerState<TaxWizardScreen> {
                   TextFormField(
                     controller: _incomeCtrl,
                     keyboardType: TextInputType.number,
+                    autovalidateMode: AutovalidateMode.onUserInteraction,
                     style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w600),
                     decoration: InputDecoration(
                       prefixText: '₹ ',
@@ -82,8 +122,8 @@ class _TaxWizardScreenState extends ConsumerState<TaxWizardScreen> {
                         onPressed: () {
                           final val = double.tryParse(_incomeCtrl.text);
                           if (val != null && val > 0) {
-                            setState(() => _income = val);
                             FocusScope.of(context).unfocus();
+                            _setIncome(val);
                           }
                         },
                       ),
@@ -93,7 +133,7 @@ class _TaxWizardScreenState extends ConsumerState<TaxWizardScreen> {
                     ),
                     onFieldSubmitted: (v) {
                       final val = double.tryParse(v);
-                      if (val != null && val > 0) setState(() => _income = val);
+                      if (val != null && val > 0) _setIncome(val);
                     },
                   ),
                   const SizedBox(height: 8),
@@ -103,8 +143,8 @@ class _TaxWizardScreenState extends ConsumerState<TaxWizardScreen> {
                       final selected = _income == v;
                       return GestureDetector(
                         onTap: () {
-                          setState(() => _income = v);
                           _incomeCtrl.text = v.toInt().toString();
+                          _setIncome(v);
                         },
                         child: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
@@ -125,136 +165,140 @@ class _TaxWizardScreenState extends ConsumerState<TaxWizardScreen> {
 
             const SizedBox(height: 24),
 
-            // ── Regime Comparison ──────────────────────────────
-            Row(
-              children: [
-                Expanded(child: _regimeCard(report.oldRegime, maxTax, isOldBetter)),
-                const SizedBox(width: 12),
-                Expanded(child: _regimeCard(report.newRegime, maxTax, !isOldBetter)),
-              ],
-            ).animate(delay: 100.ms).fadeIn(),
-
-            const SizedBox(height: 20),
-
-            // ── Savings Banner ─────────────────────────────────
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [AppColors.primaryTeal.withOpacity(0.12), AppColors.cardColor],
-                ),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: AppColors.primaryTeal.withOpacity(0.3)),
-              ),
-              child: Column(
+            if (_isLoading || _report == null)
+              const Center(child: CircularProgressIndicator(color: AppColors.primaryTeal))
+            else ...[
+              // ── Regime Comparison ──────────────────────────────
+              Row(
                 children: [
-                  const Text('YOU CAN SAVE', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: AppColors.textTertiary, letterSpacing: 1.5)),
-                  const SizedBox(height: 8),
-                  Text(CurrencyFormatter.format(saving),
-                      style: AppTextStyles.financialLarge.copyWith(fontSize: 28)),
-                  const SizedBox(height: 4),
-                  Text('by choosing ${isOldBetter ? "Old" : "New"} Regime',
-                      style: const TextStyle(fontSize: 13, color: AppColors.textSecondary)),
+                  Expanded(child: _regimeCard(_report!.oldRegime, _report!.oldRegime.taxPayable > _report!.newRegime.taxPayable ? _report!.oldRegime.taxPayable : _report!.newRegime.taxPayable, _report!.isOldRegimeBetter)),
+                  const SizedBox(width: 12),
+                  Expanded(child: _regimeCard(_report!.newRegime, _report!.oldRegime.taxPayable > _report!.newRegime.taxPayable ? _report!.oldRegime.taxPayable : _report!.newRegime.taxPayable, !_report!.isOldRegimeBetter)),
                 ],
-              ),
-            ).animate(delay: 200.ms).fadeIn().scale(begin: const Offset(0.95, 0.95)),
+              ).animate(delay: 100.ms).fadeIn(),
 
-            const SizedBox(height: 24),
+              const SizedBox(height: 20),
 
-            // ── Missed Deductions ──────────────────────────────
-            if (report.channels.isNotEmpty) ...[
-              const Text('DEDUCTION OPPORTUNITIES', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: AppColors.textTertiary, letterSpacing: 1.5)),
-              const SizedBox(height: 12),
-              ...report.channels.asMap().entries.map((entry) {
-                final ch = entry.value;
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 12),
-                  padding: const EdgeInsets.all(16),
+              // ── Savings Banner ─────────────────────────────────
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [AppColors.primaryTeal.withOpacity(0.12), AppColors.cardColor],
+                  ),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: AppColors.primaryTeal.withOpacity(0.3)),
+                ),
+                child: Column(
+                  children: [
+                    const Text('YOU CAN SAVE', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: AppColors.textTertiary, letterSpacing: 1.5)),
+                    const SizedBox(height: 8),
+                    Text(CurrencyFormatter.format((_report!.oldRegime.taxPayable - _report!.newRegime.taxPayable).abs()),
+                        style: AppTextStyles.financialLarge.copyWith(fontSize: 28)),
+                    const SizedBox(height: 4),
+                    Text('by choosing ${_report!.isOldRegimeBetter ? "Old" : "New"} Regime',
+                        style: const TextStyle(fontSize: 13, color: AppColors.textSecondary)),
+                  ],
+                ),
+              ).animate(delay: 200.ms).fadeIn().scale(begin: const Offset(0.95, 0.95)),
+
+              const SizedBox(height: 24),
+
+              // ── Missed Deductions ──────────────────────────────
+              if (_report!.channels.isNotEmpty) ...[
+                const Text('DEDUCTION OPPORTUNITIES', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: AppColors.textTertiary, letterSpacing: 1.5)),
+                const SizedBox(height: 12),
+                ..._report!.channels.asMap().entries.map((entry) {
+                  final ch = entry.value;
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: AppColors.cardColor,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: AppColors.borderColor),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: AppColors.warningAmber.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Icon(_channelIcon(ch.icon), color: AppColors.warningAmber, size: 18),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(ch.name, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14)),
+                              Text(ch.subtitle, style: const TextStyle(color: AppColors.textTertiary, fontSize: 12)),
+                            ],
+                          ),
+                        ),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Text(CurrencyFormatter.compact(ch.amount),
+                                style: const TextStyle(color: AppColors.primaryTeal, fontWeight: FontWeight.w700)),
+                            Text(ch.status, style: TextStyle(fontSize: 9, color: ch.status == 'NOT UTILIZED' ? AppColors.dangerRed : AppColors.warningAmber)),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ).animate(delay: Duration(milliseconds: 300 + entry.key * 100)).fadeIn();
+                }),
+              ],
+
+              // ── Artha Verdict ──────────────────────────────────
+              if (_report!.arthaVerdict.isNotEmpty) ...[
+                const SizedBox(height: 16),
+                Container(
+                  clipBehavior: Clip.antiAlias,
                   decoration: BoxDecoration(
-                    color: AppColors.cardColor,
+                    color: AppColors.primaryTeal.withOpacity(0.05),
                     borderRadius: BorderRadius.circular(14),
                     border: Border.all(color: AppColors.borderColor),
                   ),
                   child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: AppColors.warningAmber.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(10),
+                        width: 4,
+                        constraints: const BoxConstraints(minHeight: 80),
+                        decoration: const BoxDecoration(
+                          color: AppColors.primaryTeal,
+                          borderRadius: BorderRadius.only(
+                            topLeft: Radius.circular(14),
+                            bottomLeft: Radius.circular(14),
+                          ),
                         ),
-                        child: Icon(_channelIcon(ch.icon), color: AppColors.warningAmber, size: 18),
                       ),
-                      const SizedBox(width: 12),
                       Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(ch.name, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14)),
-                            Text(ch.subtitle, style: const TextStyle(color: AppColors.textTertiary, fontSize: 12)),
-                          ],
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(children: [
+                                CircleAvatar(radius: 12, backgroundColor: AppColors.primaryTeal,
+                                  child: const Text('A', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 10))),
+                                const SizedBox(width: 8),
+                                const Text('ARTHA VERDICT', style: TextStyle(color: AppColors.primaryTeal, fontSize: 10, fontWeight: FontWeight.w700, letterSpacing: 1.2)),
+                              ]),
+                              const SizedBox(height: 10),
+                              Text(_report!.arthaVerdict, style: AppTextStyles.arthaQuote),
+                            ],
+                          ),
                         ),
-                      ),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          Text(CurrencyFormatter.compact(ch.amount),
-                              style: const TextStyle(color: AppColors.primaryTeal, fontWeight: FontWeight.w700)),
-                          Text(ch.status, style: TextStyle(fontSize: 9, color: ch.status == 'NOT UTILIZED' ? AppColors.dangerRed : AppColors.warningAmber)),
-                        ],
                       ),
                     ],
                   ),
-                ).animate(delay: Duration(milliseconds: 300 + entry.key * 100)).fadeIn();
-              }),
-            ],
-
-            // ── Artha Verdict ──────────────────────────────────
-            if (report.arthaVerdict.isNotEmpty) ...[
-              const SizedBox(height: 16),
-              Container(
-                clipBehavior: Clip.antiAlias,
-                decoration: BoxDecoration(
-                  color: AppColors.primaryTeal.withOpacity(0.05),
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: AppColors.borderColor),
                 ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Container(
-                      width: 4,
-                      constraints: const BoxConstraints(minHeight: 80),
-                      decoration: const BoxDecoration(
-                        color: AppColors.primaryTeal,
-                        borderRadius: BorderRadius.only(
-                          topLeft: Radius.circular(14),
-                          bottomLeft: Radius.circular(14),
-                        ),
-                      ),
-                    ),
-                    Expanded(
-                      child: Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(children: [
-                              CircleAvatar(radius: 12, backgroundColor: AppColors.primaryTeal,
-                                child: const Text('A', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 10))),
-                              const SizedBox(width: 8),
-                              const Text('ARTHA VERDICT', style: TextStyle(color: AppColors.primaryTeal, fontSize: 10, fontWeight: FontWeight.w700, letterSpacing: 1.2)),
-                            ]),
-                            const SizedBox(height: 10),
-                            Text(report.arthaVerdict, style: AppTextStyles.arthaQuote),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+              ],
             ],
 
             // ── Disclaimer ─────────────────────────────────────

@@ -2,6 +2,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../services/firebase_service.dart';
 import '../../../services/user_prefs_service.dart';
+import '../../../services/api_service.dart';
 
 // Stream of Firebase auth state
 final authStateProvider = StreamProvider<User?>((ref) {
@@ -24,6 +25,17 @@ class AuthController extends StateNotifier<AuthState> {
     state = state.copyWith(isLoading: true, error: null);
     try {
       final credential = await FirebaseService.instance.signInWithGoogle();
+      
+      // Fetch user profile from MongoDB backend to fix Bug 1 (Cross-device sync)
+      try {
+        final authData = await ApiService.instance.verifyAuth();
+        if (authData['onboarding_complete'] == true) {
+          await UserPrefsService.setOnboardingComplete(true);
+        }
+      } catch (e) {
+        // Safe to ignore if API is briefly down, defaults to local
+      }
+
       state = state.copyWith(isLoading: false);
       return FirebaseService.instance.isNewUser(credential);
     } on FirebaseAuthException catch (e) {

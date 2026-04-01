@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fl_chart/fl_chart.dart';
@@ -6,23 +7,94 @@ import 'package:share_plus/share_plus.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/utils/currency_formatter.dart';
+import '../../../core/utils/currency_input_formatter.dart';
+import '../../../models/fire_plan_model.dart';
+import '../../../services/api_service.dart';
 import '../../language/providers/language_provider.dart';
 import '../providers/fire_provider.dart';
 
-class FirePlannerScreen extends ConsumerWidget {
+class FirePlannerScreen extends ConsumerStatefulWidget {
   const FirePlannerScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<FirePlannerScreen> createState() => _FirePlannerScreenState();
+}
+
+class _FirePlannerScreenState extends ConsumerState<FirePlannerScreen> {
+  FirePlanModel? _plan;
+  bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _fetchPlan(ref.read(fireInputProvider));
+    });
+  }
+
+  Future<void> _fetchPlan(FireGoalInput input) async {
+    if (!mounted) return;
+    setState(() => _isLoading = true);
+
+    try {
+      final p = await ApiService.instance.getFirePlan(
+        targetAmount: input.targetAmount,
+        targetYears: input.targetYears,
+        currentSavings: input.currentSavings,
+      );
+      if (mounted) {
+        setState(() {
+          _plan = p;
+          _isLoading = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    ref.listen<FireGoalInput>(fireInputProvider, (prev, next) {
+      if (prev != next) {
+        _fetchPlan(next);
+      }
+    });
+
     final input = ref.watch(fireInputProvider);
-    final plan = ref.watch(firePlanProvider(input));
     final lang = ref.watch(languageProvider);
 
-    return Scaffold(
-      backgroundColor: AppColors.backgroundColor,
-      appBar: AppBar(
+    if (_plan == null) {
+      return Scaffold(
+        backgroundColor: AppColors.backgroundColor,
+        body: Center(
+          child: _isLoading
+              ? const CircularProgressIndicator(color: AppColors.primaryTeal)
+              : const Text('Failed to calculate FIRE plan.', style: TextStyle(color: AppColors.textSecondary)),
+        ),
+      );
+    }
+
+    final plan = _plan!;
+    return Stack(
+      children: [
+        Scaffold(
+          backgroundColor: AppColors.backgroundColor,
+          appBar: AppBar(
         title: Text(lang == 'hi' ? 'FIRE प्लानर 🔥' : 'FIRE Planner 🔥', style: AppTextStyles.subheading),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh_rounded, size: 20, color: AppColors.primaryTeal),
+            tooltip: 'Refresh',
+            onPressed: () {
+              _fetchPlan(input);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Refreshing FIRE plan...'), backgroundColor: AppColors.primaryTeal, duration: Duration(seconds: 1)),
+              );
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.share_rounded, size: 20),
             onPressed: () {
@@ -134,7 +206,7 @@ class FirePlannerScreen extends ConsumerWidget {
                     bottomTitles: AxisTitles(
                       sideTitles: SideTitles(
                         showTitles: true,
-                        getTitlesWidget: (v, _) => Text('Y${v.toInt()}', style: const TextStyle(fontSize: 10, color: AppColors.textTertiary)),
+                        getTitlesWidget: (v, _) => Text('${DateTime.now().year + v.toInt()}', style: const TextStyle(fontSize: 10, color: AppColors.textTertiary)),
                       ),
                     ),
                     leftTitles: AxisTitles(
@@ -281,6 +353,15 @@ class FirePlannerScreen extends ConsumerWidget {
           ],
         ),
       ),
+    ),
+    if (_isLoading)
+      Container(
+        color: Colors.black.withOpacity(0.5),
+        child: const Center(
+          child: CircularProgressIndicator(color: AppColors.primaryTeal),
+        ),
+      ),
+    ],
     );
   }
 
@@ -294,6 +375,7 @@ class FirePlannerScreen extends ConsumerWidget {
         content: TextField(
           controller: ctrl,
           keyboardType: TextInputType.number,
+          inputFormatters: [FilteringTextInputFormatter.digitsOnly, CurrencyInputFormatter()],
           style: const TextStyle(color: Colors.white),
           decoration: InputDecoration(
             prefixText: '₹ ',
@@ -307,8 +389,8 @@ class FirePlannerScreen extends ConsumerWidget {
           TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
           ElevatedButton(
             onPressed: () {
-              final val = double.tryParse(ctrl.text);
-              if (val != null && val > 0) {
+              final val = parseAmount(ctrl.text);
+              if (val > 0) {
                 onSave(val);
                 Navigator.pop(context);
               }

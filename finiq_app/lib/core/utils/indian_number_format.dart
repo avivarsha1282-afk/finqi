@@ -20,22 +20,17 @@ class IndianNumberFormat {
     final prefix = amount < 0 ? '-' : '';
     final abs = amount.abs();
 
-    if (abs >= 10000000) {
-      final crores = abs / 10000000;
-      if (crores == crores.roundToDouble()) {
-        return '$prefix₹${crores.toInt()}Cr';
-      }
-      return '$prefix₹${crores.toStringAsFixed(2)}Cr';
-    } else if (abs >= 100000) {
-      final lakhs = abs / 100000;
-      if (lakhs == lakhs.roundToDouble()) {
-        return '$prefix₹${lakhs.toInt()}L';
-      }
-      return '$prefix₹${lakhs.toStringAsFixed(2)}L';
-    } else if (abs >= 1000) {
-      final thousands = abs / 1000;
-      return '$prefix₹${thousands.toStringAsFixed(0)}K';
+    String cleanValue(double val) {
+      String s = val.toStringAsFixed(2);
+      if (s.endsWith('.00')) return s.substring(0, s.length - 3);
+      if (s.endsWith('0')) return s.substring(0, s.length - 1);
+      return s;
     }
+
+    if (abs >= 10000000) return '$prefix₹${cleanValue(abs / 10000000)}Cr';
+    if (abs >= 100000) return '$prefix₹${cleanValue(abs / 100000)}L';
+    if (abs >= 1000) return '$prefix₹${cleanValue(abs / 1000)}K';
+    
     return formatRupee(amount);
   }
 

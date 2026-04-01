@@ -136,7 +136,9 @@ class UserDataService {
     return name.split(' ').first;
   }
 
-  /// Save all onboarding data as individual UID-prefixed SharedPreferences keys
+  /// Save all onboarding data as individual UID-prefixed SharedPreferences keys.
+  /// Handles both old-format keys (from Firestore sync) and new-format keys
+  /// (from corrected onboarding provider).
   static Future<void> persistOnboardingData(
       Map<String, dynamic> data) async {
     // Personal
@@ -146,14 +148,14 @@ class UserDataService {
     await UserPrefsService.setString(
         'user_occupation', data['occupation'] ?? 'Salaried');
 
-    // Income
-    final monthlyIncome = (data['monthly_income'] ?? 0).toDouble();
+    // Income — accept both `monthly_salary` (new) and `monthly_income` (old)
+    final monthlyIncome = (data['monthly_salary'] ?? data['monthly_income'] ?? 0).toDouble();
     await UserPrefsService.setDouble('monthly_income', monthlyIncome);
     await UserPrefsService.setDouble('annual_income', monthlyIncome * 12);
     await UserPrefsService.setDouble(
-        'monthly_expense', (data['monthly_expense'] ?? 0).toDouble());
+        'monthly_expense', (data['monthly_expense'] ?? data['monthly_expenses'] ?? 0).toDouble());
     await UserPrefsService.setDouble(
-        'monthly_rent', (data['monthly_rent'] ?? 0).toDouble());
+        'monthly_rent', (data['monthly_rent'] ?? data['house_rent'] ?? 0).toDouble());
 
     // Savings & Investments
     await UserPrefsService.setDouble(
@@ -161,34 +163,36 @@ class UserDataService {
     await UserPrefsService.setDouble(
         'mutual_funds', (data['mutual_funds'] ?? 0).toDouble());
     await UserPrefsService.setDouble(
-        'ppf_balance', (data['ppf'] ?? 0).toDouble());
+        'ppf_balance', (data['ppf'] ?? data['ppf_balance'] ?? 0).toDouble());
     await UserPrefsService.setDouble(
-        'nps_balance', (data['nps'] ?? 0).toDouble());
+        'nps_balance', (data['nps'] ?? data['nps_balance'] ?? data['nps_contribution'] ?? 0).toDouble());
     await UserPrefsService.setDouble(
-        'deduction_80c', (data['annual_80c'] ?? 0).toDouble());
+        'deduction_80c', (data['section_80c'] ?? data['annual_80c'] ?? data['deduction_80c'] ?? 0).toDouble());
     await UserPrefsService.setDouble(
-        'deduction_80d', (data['annual_80d'] ?? 0).toDouble());
+        'deduction_80d', (data['premium_80d'] ?? data['annual_80d'] ?? data['deduction_80d'] ?? 0).toDouble());
     await UserPrefsService.setDouble(
-        'annual_nps', (data['annual_nps'] ?? 0).toDouble());
+        'annual_nps', (data['nps_contribution'] ?? data['annual_nps'] ?? 0).toDouble());
 
-    // Insurance & Debt
+    // Insurance & Debt — accept both bool and string "Yes"/"No"
+    final healthIns = data['has_health_insurance'] ?? data['health_insurance'] ?? false;
+    final termIns = data['has_term_insurance'] ?? data['life_insurance'] ?? false;
     await UserPrefsService.setBool(
-        'has_health_insurance', data['has_health_insurance'] ?? false);
+        'has_health_insurance', _toBool(healthIns));
     await UserPrefsService.setBool(
-        'has_term_insurance', data['has_term_insurance'] ?? false);
+        'has_term_insurance', _toBool(termIns));
     await UserPrefsService.setDouble(
         'home_loan_emi', (data['home_loan_emi'] ?? 0).toDouble());
     await UserPrefsService.setDouble(
-        'total_emi', (data['total_emi'] ?? 0).toDouble());
+        'total_emi', (data['total_emi'] ?? data['emis'] ?? 0).toDouble());
 
     // Goals
     await UserPrefsService.setString(
         'goal_type', data['goal_type'] ?? 'Wealth');
     await UserPrefsService.setString(
-        'goal_name', data['goal_name'] ?? 'Financial Freedom');
+        'goal_name', data['financial_goal'] ?? data['goal_name'] ?? 'Financial Freedom');
     await UserPrefsService.setDouble(
-        'goal_amount', (data['goal_amount'] ?? 1000000).toDouble());
-    await UserPrefsService.setInt('goal_years', data['goal_years'] ?? 5);
+        'goal_amount', (data['financial_goal_amount'] ?? data['goal_amount'] ?? 1000000).toDouble());
+    await UserPrefsService.setInt('goal_years', data['target_timeline'] ?? data['goal_years'] ?? 5);
     await UserPrefsService.setString(
         'risk_appetite', data['risk_appetite'] ?? 'Moderate');
 
@@ -197,17 +201,25 @@ class UserDataService {
         'onboarding_data', json.encode(data));
   }
 
+  /// Convert various truthy values to bool
+  static bool _toBool(dynamic value) {
+    if (value is bool) return value;
+    if (value is String) return value.toLowerCase().trim() == 'yes' || value.toLowerCase().trim() == 'true';
+    if (value is num) return value > 0;
+    return false;
+  }
+
   /// Run local financial analysis and save to UID-prefixed SharedPreferences
   static Future<void> calculateAndSaveLocally(
       Map<String, dynamic> profile) async {
-    final income = (profile['monthly_income'] ?? 0).toDouble();
-    final expense = (profile['monthly_expense'] ?? 0).toDouble();
+    final income = (profile['monthly_salary'] ?? profile['monthly_income'] ?? 0).toDouble();
+    final expense = (profile['monthly_expense'] ?? profile['monthly_expenses'] ?? 0).toDouble();
     final savings = (profile['current_savings'] ?? 0).toDouble();
-    final emi = (profile['total_emi'] ?? 0).toDouble();
-    final has80c = (profile['annual_80c'] ?? 0).toDouble();
-    final has80d = (profile['annual_80d'] ?? 0).toDouble();
-    final hasHealth = profile['has_health_insurance'] ?? false;
-    final hasTerm = profile['has_term_insurance'] ?? false;
+    final emi = (profile['total_emi'] ?? profile['emis'] ?? 0).toDouble();
+    final has80c = (profile['section_80c'] ?? profile['annual_80c'] ?? profile['deduction_80c'] ?? 0).toDouble();
+    final has80d = (profile['premium_80d'] ?? profile['annual_80d'] ?? profile['deduction_80d'] ?? 0).toDouble();
+    final hasHealth = _toBool(profile['has_health_insurance'] ?? profile['health_insurance'] ?? false);
+    final hasTerm = _toBool(profile['has_term_insurance'] ?? profile['life_insurance'] ?? false);
 
     // Emergency Fund dimension (0-20)
     int emergencyScore = 0;
@@ -235,8 +247,8 @@ class UserDataService {
     // Investment Mix dimension (0-20)
     int investmentScore = 8; // baseline
     final mf = (profile['mutual_funds'] ?? 0).toDouble();
-    final ppf = (profile['ppf'] ?? 0).toDouble();
-    final nps = (profile['nps'] ?? 0).toDouble();
+    final ppf = (profile['ppf'] ?? profile['ppf_balance'] ?? 0).toDouble();
+    final nps = (profile['nps'] ?? profile['nps_contribution'] ?? profile['nps_balance'] ?? 0).toDouble();
     int assetCount = 0;
     if (mf > 0) assetCount++;
     if (ppf > 0) assetCount++;
@@ -271,7 +283,7 @@ class UserDataService {
 
     // FIRE Progress dimension (0-10)
     int fireScore = 2;
-    final goalAmount = (profile['goal_amount'] ?? 1000000).toDouble();
+    final goalAmount = (profile['financial_goal_amount'] ?? profile['goal_amount'] ?? 1000000).toDouble();
     if (goalAmount > 0 && savings > 0) {
       final progress = savings / goalAmount;
       if (progress >= 0.5) {
@@ -303,7 +315,7 @@ class UserDataService {
     }
 
     // SIP calculation
-    final goalYears = profile['goal_years'] ?? 5;
+    final goalYears = profile['target_timeline'] ?? profile['goal_years'] ?? 5;
     final r = 0.01; // 12% pa monthly
     final n = (goalYears as int) * 12;
     double sip = 0;
@@ -322,7 +334,7 @@ class UserDataService {
     // Tax saving opportunity — use ACTUAL user deductions
     final missed80c = (150000 - has80c).clamp(0.0, 150000.0);
     final missed80d = (25000 - has80d).clamp(0.0, 25000.0);
-    final annualNps = (profile['annual_nps'] ?? 0).toDouble();
+    final annualNps = (profile['nps_contribution'] ?? profile['annual_nps'] ?? 0).toDouble();
     final missedNps = (50000 - annualNps).clamp(0.0, 50000.0);
     final annualIncome = income * 12;
     final marginalRate = annualIncome > 1000000

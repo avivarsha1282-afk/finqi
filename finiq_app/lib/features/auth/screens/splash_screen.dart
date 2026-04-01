@@ -3,6 +3,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../services/user_prefs_service.dart';
 
@@ -17,28 +18,43 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
   @override
   void initState() {
     super.initState();
-    _navigate();
+    _determineRoute();
   }
 
-  Future<void> _navigate() async {
+  Future<void> _determineRoute() async {
+    // Let the splash animation play for at least 2.2 seconds
     await Future.delayed(const Duration(milliseconds: 2200));
     if (!mounted) return;
 
     final user = FirebaseAuth.instance.currentUser;
+
+    // Not logged in → login screen
     if (user == null) {
       context.go('/login');
       return;
     }
 
-    // UID-prefixed onboarding check — ensures per-user state
-    final onboardingDone = await UserPrefsService.isOnboardingComplete();
+    // --- Check onboarding status (Firestore primary, SharedPrefs fallback) ---
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get()
+          .timeout(const Duration(seconds: 5));
 
-    if (!mounted) return;
-
-    if (!onboardingDone) {
-      context.go('/onboarding/step1');
-    } else {
-      context.go('/home');
+      if (doc.exists && doc.data()?['onboarding_complete'] == true) {
+        // Sync to SharedPrefs so offline works next time
+        await UserPrefsService.setOnboardingComplete(true);
+        if (mounted) context.go('/home');
+      } else {
+        // Firestore says not complete → check if SharedPrefs has it (edge case)
+        final localDone = await UserPrefsService.isOnboardingComplete();
+        if (mounted) context.go(localDone ? '/home' : '/onboarding/step1');
+      }
+    } catch (e) {
+      // Firestore timeout or offline → fall back to SharedPreferences
+      final localDone = await UserPrefsService.isOnboardingComplete();
+      if (mounted) context.go(localDone ? '/home' : '/onboarding/step1');
     }
   }
 

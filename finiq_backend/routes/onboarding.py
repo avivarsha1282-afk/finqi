@@ -9,6 +9,30 @@ from datetime import datetime
 
 onboarding_bp = Blueprint('onboarding', __name__)
 
+def _validate_onboarding_data(data: dict):
+    """Validate onboarding input — reject negative numbers and unrealistic values."""
+    numeric_fields = [
+        'monthly_salary', 'monthly_expense', 'current_savings',
+        'financial_goal_amount', 'total_emi', 'section_80c',
+        'premium_80d', 'nps_contribution', 'monthly_rent',
+    ]
+    for field in numeric_fields:
+        value = data.get(field)
+        if value is None:
+            continue
+        try:
+            # Strip commas and currency symbols before parsing
+            if isinstance(value, str):
+                value = value.replace(',', '').replace('₹', '').strip()
+            val = float(value)
+            if val < 0:
+                return False, f'{field} cannot be negative'
+            if field == 'monthly_salary' and val > 10_000_000:
+                return False, f'{field} value seems unrealistic (max ₹1Cr/month)'
+        except (TypeError, ValueError):
+            return False, f'{field} must be a number'
+    return True, 'valid'
+
 def _uid_from_request():
     """Extract verified UID from Authorization header. Returns (uid, error_response)."""
     auth_header = request.headers.get('Authorization')
@@ -26,6 +50,11 @@ def save_onboarding():
         return err
 
     data = request.json or {}
+
+    # ── Validate input ───────────────────────────────────────────────────────
+    valid, err_msg = _validate_onboarding_data(data)
+    if not valid:
+        return jsonify({'error': err_msg}), 400
 
     # ── Build normalized profile ─────────────────────────────────────────────
     def _float(key, default=0.0):
@@ -78,7 +107,8 @@ def save_onboarding():
     fire_plan = calculate_fire_plan(
         profile['financial_goal_amount'],
         profile['target_timeline'],
-        profile['current_savings']
+        profile['current_savings'],
+        monthly_income=profile['monthly_salary']
     )
     fire_plans_collection.update_one(
         {'firebase_uid': uid},

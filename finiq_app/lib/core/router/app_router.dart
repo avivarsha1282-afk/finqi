@@ -19,6 +19,8 @@ import '../../features/tax_wizard/screens/tax_wizard_screen.dart';
 import '../../features/artha/screens/artha_chat_screen.dart';
 import '../../features/profile/screens/profile_screen.dart';
 import '../../features/profile/screens/edit_profile_screen.dart';
+import '../../features/expenses/screens/expense_tracker_screen.dart';
+import '../../features/smart_buy/screens/smart_buy_screen.dart';
 import '../../services/user_prefs_service.dart';
 
 
@@ -100,6 +102,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(path: '/fire', builder: (_, __) => const FirePlannerScreen()),
           GoRoute(path: '/artha', builder: (_, __) => const ArthaChatScreen()),
           GoRoute(path: '/tax', builder: (_, __) => const TaxWizardScreen()),
+          GoRoute(path: '/expenses', builder: (_, __) => const ExpenseTrackerScreen()),
+          GoRoute(path: '/smart-buy', builder: (_, __) => const SmartBuyScreen()),
         ],
       ),
     ],
@@ -130,6 +134,16 @@ class ScaffoldWithBottomNav extends StatelessWidget {
     final idx = _selectedIndex(currentPath);
     return Scaffold(
       body: child,
+      floatingActionButton: currentPath != '/expenses' && currentPath != '/artha'
+          ? FloatingActionButton.extended(
+              onPressed: () => context.go('/expenses'),
+              backgroundColor: const Color(0xFF00C896),
+              foregroundColor: Colors.black,
+              icon: const Icon(Icons.add_rounded, size: 20),
+              label: const Text('Add Expense', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12)),
+              elevation: 4,
+            )
+          : null,
       bottomNavigationBar: Container(
         decoration: const BoxDecoration(
           border: Border(top: BorderSide(color: Color(0xFF1F2937), width: 1)),
