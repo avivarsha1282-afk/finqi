@@ -181,6 +181,7 @@ class _ExpenseTrackerScreenState extends ConsumerState<ExpenseTrackerScreen>
         ],
       ),
       floatingActionButton: FloatingActionButton(
+        heroTag: 'fab_add_expense_sheet',
         backgroundColor: AppColors.primaryTeal,
         onPressed: () => _showAddExpenseSheet(context, ref),
         child: const Icon(Icons.add_rounded, color: Colors.black, size: 28),

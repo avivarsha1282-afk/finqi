@@ -53,14 +53,14 @@ Future<DashboardData> _buildDashboardData(Map<String, dynamic> profile, bool off
   final realPhoto = firebaseUser?.photoURL;
 
   // Real user data — support BOTH old and new field name formats
-  final goalAmount = (profile['financial_goal_amount'] ?? profile['goal_amount'] as num?)?.toDouble() ?? 10000000;
+  final goalAmount = ((profile['financial_goal_amount'] ?? profile['goal_amount']) as num?)?.toDouble() ?? 10000000.0;
   final goalYears = (profile['target_timeline'] ?? profile['goal_years']);
   final goalYearsInt = (goalYears is int) ? goalYears : int.tryParse(goalYears?.toString() ?? '') ?? 10;
-  final currentSavings = (profile['current_savings'] as num?)?.toDouble() ?? 0;
-  final monthlySalary = (profile['monthly_salary'] ?? profile['monthly_income'] as num?)?.toDouble() ?? 0;
+  final currentSavings = (profile['current_savings'] as num?)?.toDouble() ?? 0.0;
+  final monthlySalary = ((profile['monthly_salary'] ?? profile['monthly_income']) as num?)?.toDouble() ?? 0.0;
   final annualIncome = (profile['annual_income'] as num?)?.toDouble() ?? (monthlySalary * 12);
-  final monthlyExpense = (profile['monthly_expense'] ?? profile['monthly_expenses'] as num?)?.toDouble() ?? 1;
-  final totalEmi = (profile['total_emi'] ?? profile['emis'] as num?)?.toDouble() ?? 0;
+  final monthlyExpense = ((profile['monthly_expense'] ?? profile['monthly_expenses']) as num?)?.toDouble() ?? 1.0;
+  final totalEmi = ((profile['total_emi'] ?? profile['emis']) as num?)?.toDouble() ?? 0.0;
   final monthlyIncome = monthlySalary > 0 ? monthlySalary : (annualIncome / 12);
 
   // Extract backend analysis if it exists
@@ -68,7 +68,8 @@ Future<DashboardData> _buildDashboardData(Map<String, dynamic> profile, bool off
   
   final healthScore = hsMap?['total_score'] ?? (await UserPrefsService.getInt('health_score') ?? 44);
   final grade = hsMap?['grade'] ?? (await UserPrefsService.getString('grade') ?? 'D');
-  final arthaBrief = (await UserPrefsService.getString('artha_brief')) ??
+  final arthaBrief = profile['artha_brief'] as String? ??
+      (await UserPrefsService.getString('artha_brief')) ??
       '$firstName, complete your onboarding to get personalised financial insights.';
 
   final dims = hsMap?['dimensions'] as Map<String, dynamic>? ?? {};
@@ -158,7 +159,7 @@ Future<DashboardData> _buildDashboardData(Map<String, dynamic> profile, bool off
   final sip = fireMap != null ? (fireMap['required_monthly_sip'] as num).toDouble() : MockDataService.calculateSIP(
     targetAmount: goalAmount,
     currentSavings: currentSavings,
-    years: goalYears,
+    years: goalYearsInt,
   );
   
   final timeline = fireMap != null ? (fireMap['timeline'] as List).map((e) => ChartDataPoint(year: (e['year'] as num).toInt(), corpus: (e['corpus'] as num).toDouble())).toList() : MockDataService.generateTimeline(
@@ -196,9 +197,9 @@ Future<DashboardData> _buildDashboardData(Map<String, dynamic> profile, bool off
 
   final taxMap = profile['tax_report'] as Map<String, dynamic>?;
   
-  final userDeductions80c = (profile['section_80c'] ?? profile['deduction_80c'] as num?)?.toDouble() ?? 0;
-  final userDeductions80d = (profile['premium_80d'] ?? profile['deduction_80d'] as num?)?.toDouble() ?? 0;
-  final userNps = (profile['nps_contribution'] ?? profile['annual_nps'] as num?)?.toDouble() ?? 0;
+  final userDeductions80c = ((profile['section_80c'] ?? profile['deduction_80c']) as num?)?.toDouble() ?? 0.0;
+  final userDeductions80d = ((profile['premium_80d'] ?? profile['deduction_80d']) as num?)?.toDouble() ?? 0.0;
+  final userNps = ((profile['nps_contribution'] ?? profile['annual_nps']) as num?)?.toDouble() ?? 0.0;
   
   final mockTax = MockDataService.getTaxReport(
     annualIncome: annualIncome > 0 ? annualIncome : 500000,
@@ -212,7 +213,7 @@ Future<DashboardData> _buildDashboardData(Map<String, dynamic> profile, bool off
     oldRegime: TaxRegimeResult.fromJson(taxMap['old_regime'] ?? {}),
     newRegime: TaxRegimeResult.fromJson(taxMap['new_regime'] ?? {}),
     verdict: (taxMap['recommended_regime'] ?? 'new').toString().toUpperCase(),
-    totalPotentialSaving: (taxMap['total_potential_saving'] as num?)?.toDouble() ?? 0,
+    totalPotentialSaving: (taxMap['total_potential_saving'] as num?)?.toDouble() ?? 0.0,
     channels: (taxMap['missed_deductions'] as List<dynamic>? ?? [])
         .map((c) => TaxChannel.fromJson(c as Map<String, dynamic>))
         .toList(),
@@ -248,10 +249,13 @@ final dashboardProvider = StreamProvider.autoDispose<DashboardData>((ref) async*
   try {
     final apiData = await ApiService.instance.getDashboard();
     final merged = Map<String, dynamic>.from(apiData['profile'] ?? apiData);
-    if (apiData.containsKey('health_score')) merged['health_score'] = apiData['health_score'];
+    // Map both possible key names for health score
+    final scoreData = apiData['health_score'] ?? apiData['latest_score'];
+    if (scoreData != null) merged['health_score'] = scoreData;
     if (apiData.containsKey('fire_plan')) merged['fire_plan'] = apiData['fire_plan'];
     if (apiData.containsKey('tax_report')) merged['tax_report'] = apiData['tax_report'];
     if (apiData.containsKey('gemini_dashboard')) merged['gemini_dashboard'] = apiData['gemini_dashboard'];
+    if (apiData.containsKey('artha_brief')) merged['artha_brief'] = apiData['artha_brief'];
 
     await CacheService.cacheDashboard(merged);
     yield await _buildDashboardData(merged, false);

@@ -136,6 +136,7 @@ class ScaffoldWithBottomNav extends StatelessWidget {
       body: child,
       floatingActionButton: currentPath != '/expenses' && currentPath != '/artha'
           ? FloatingActionButton.extended(
+              heroTag: 'fab_add_expense',
               onPressed: () => context.go('/expenses'),
               backgroundColor: const Color(0xFF00C896),
               foregroundColor: Colors.black,

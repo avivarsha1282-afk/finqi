@@ -461,6 +461,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         },
       ),
       floatingActionButton: FloatingActionButton.extended(
+        heroTag: 'fab_ask_artha',
         onPressed: () => context.go('/artha'),
         backgroundColor: AppColors.primaryTeal,
         icon: const Icon(Icons.auto_awesome_rounded, color: Colors.black),
