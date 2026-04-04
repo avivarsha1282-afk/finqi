@@ -1,10 +1,12 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../services/user_prefs_service.dart';
 import '../../../services/user_data_service.dart';
 import '../../../core/utils/indian_number_format.dart';
+import '../../../core/utils/currency_input_formatter.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../features/onboarding/widgets/onboarding_shared.dart';
@@ -52,13 +54,22 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> with Sing
       _cityCtrl.text = _data['city'] ?? '';
       _occupation = _data['occupation'] ?? 'Salaried Employee';
 
-      double getNum(String key) => (_data[key] is num) ? (_data[key] as num).toDouble() : 0.0;
+      double getNum(String key) {
+        final v = _data[key];
+        if (v is num) return v.toDouble();
+        if (v is String) {
+          final cleaned = v.replaceAll(RegExp(r'[^0-9.]'), '');
+          return double.tryParse(cleaned) ?? 0.0;
+        }
+        return 0.0;
+      }
 
-      // Only format values that are strictly numbers representing money
-      _incomeCtrl.text = IndianNumberFormat.formatFull(getNum('monthly_income'));
-      _expenseCtrl.text = IndianNumberFormat.formatFull(getNum('monthly_expense'));
-      _savingsCtrl.text = IndianNumberFormat.formatFull(getNum('current_savings'));
-      _goalAmountCtrl.text = IndianNumberFormat.formatFull(getNum('goal_amount'));
+      // Load RAW digits into controllers — no commas, no ₹
+      // The CurrencyInputFormatter handles visual formatting as user types
+      _incomeCtrl.text = getNum('monthly_income').toStringAsFixed(0);
+      _expenseCtrl.text = getNum('monthly_expense').toStringAsFixed(0);
+      _savingsCtrl.text = getNum('current_savings').toStringAsFixed(0);
+      _goalAmountCtrl.text = getNum('goal_amount').toStringAsFixed(0);
       _goalYearsCtrl.text = (_data['goal_years'] ?? 7).toString();
       
       _riskAppetite = _data['risk_appetite'] ?? 'Moderate';
@@ -66,17 +77,85 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> with Sing
     });
   }
 
+  String? _validationError;
+  bool _showHighIncomeHint = false;
+  bool _showCorruptionSuggestion = false;
+  double _suggestedIncome = 0;
+
+  double _parseRaw(String text) {
+    final cleaned = text.replaceAll(RegExp(r'[^0-9.]'), '');
+    return double.tryParse(cleaned) ?? 0.0;
+  }
+
+  String _formatIndian(double v) {
+    if (v >= 10000000) return '₹${(v / 10000000).toStringAsFixed(2)} Cr';
+    if (v >= 100000) return '₹${(v / 100000).toStringAsFixed(2)} L';
+    return '₹${v.toStringAsFixed(0)}';
+  }
+
+  void _onIncomeChanged() {
+    final income = _parseRaw(_incomeCtrl.text);
+    setState(() {
+      if (income > 500000000) { // > ₹5 Crore — likely corrupted
+        _showHighIncomeHint = false;
+        _showCorruptionSuggestion = true;
+        _suggestedIncome = income / 100;
+        _validationError = 'This looks unusually high. Did you mean ${_formatIndian(income / 100)} instead?';
+      } else if (income > 1000000) { // > ₹10 Lakh — high but valid
+        _showHighIncomeHint = true;
+        _showCorruptionSuggestion = false;
+        _validationError = null;
+      } else {
+        _showHighIncomeHint = false;
+        _showCorruptionSuggestion = false;
+        _validationError = null;
+      }
+    });
+  }
+
+  void _applySuggestedIncome() {
+    _incomeCtrl.text = _suggestedIncome.toStringAsFixed(0);
+    setState(() {
+      _showCorruptionSuggestion = false;
+      _validationError = null;
+      _onIncomeChanged();
+    });
+  }
+
   Future<void> _save() async {
+    final income = _parseRaw(_incomeCtrl.text);
+    final expense = _parseRaw(_expenseCtrl.text);
+    final savings = _parseRaw(_savingsCtrl.text);
+    final goalAmt = _parseRaw(_goalAmountCtrl.text);
+
+    // Tier 3 — block save if corruption suggestion is active (user must resolve)
+    if (_showCorruptionSuggestion) {
+      return; // user must tap "Use Suggested" or manually fix
+    }
+
+    if (expense > income && income > 0) {
+      setState(() => _validationError = 'Expenses cannot exceed income');
+      return;
+    }
+    if (savings > 500000000) {
+      setState(() => _validationError = 'Savings value seems unrealistic (max ₹50Cr)');
+      return;
+    }
+    setState(() => _validationError = null);
+
     _data['name'] = _nameCtrl.text.trim();
     _data['age'] = int.tryParse(_ageCtrl.text) ?? 25;
     _data['city'] = _cityCtrl.text.trim();
     _data['occupation'] = _occupation;
-    _data['monthly_income'] = IndianNumberFormat.parse(_incomeCtrl.text) ?? 0;
-    _data['annual_income'] = (IndianNumberFormat.parse(_incomeCtrl.text) ?? 0) * 12;
-    _data['monthly_expense'] = IndianNumberFormat.parse(_expenseCtrl.text) ?? 0;
-    _data['current_savings'] = IndianNumberFormat.parse(_savingsCtrl.text) ?? 0;
-    _data['goal_amount'] = IndianNumberFormat.parse(_goalAmountCtrl.text) ?? 0;
+    _data['monthly_income'] = income;
+    _data['monthly_salary'] = income;
+    _data['annual_income'] = income * 12;
+    _data['monthly_expense'] = expense;
+    _data['current_savings'] = savings;
+    _data['goal_amount'] = goalAmt;
+    _data['financial_goal_amount'] = goalAmt;
     _data['goal_years'] = int.tryParse(_goalYearsCtrl.text) ?? 7;
+    _data['target_timeline'] = int.tryParse(_goalYearsCtrl.text) ?? 7;
     _data['risk_appetite'] = _riskAppetite;
     _data['goal_type'] = _goalType;
     await UserPrefsService.setString('onboarding_data', json.encode(_data));
@@ -187,18 +266,91 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> with Sing
         child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (_validationError != null) ...[
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              margin: const EdgeInsets.only(bottom: 16),
+              decoration: BoxDecoration(
+                color: AppColors.dangerRed.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: AppColors.dangerRed.withValues(alpha: 0.3)),
+              ),
+              child: Text(_validationError!, style: const TextStyle(color: AppColors.dangerRed, fontSize: 13)),
+            ),
+          ],
           onboardingLabel('Monthly Income'),
           TextFormField(controller: _incomeCtrl, keyboardType: TextInputType.number,
+            inputFormatters: [FilteringTextInputFormatter.digitsOnly, CurrencyInputFormatter()],
             style: const TextStyle(color: Colors.white),
-            decoration: onboardingInputDecoration('50000', prefix: '₹ ')),
+            decoration: onboardingInputDecoration('50000', prefix: '₹ '),
+            onChanged: (_) => _onIncomeChanged()),
+          // Tier 2 — amber info card for high income
+          if (_showHighIncomeHint)
+            Container(
+              margin: const EdgeInsets.only(top: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFC107).withValues(alpha: 0.08),
+                border: Border.all(color: const Color(0xFFFFC107).withValues(alpha: 0.25)),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Row(children: [
+                Icon(Icons.info_outline, color: Color(0xFFFFC107), size: 14),
+                SizedBox(width: 8),
+                Expanded(child: Text('High income entered. Tap Save to confirm.',
+                  style: TextStyle(color: Color(0xFFFFC107), fontSize: 12))),
+              ]),
+            ),
+          // Tier 3 — corruption suggestion with auto-fix button
+          if (_showCorruptionSuggestion)
+            Container(
+              margin: const EdgeInsets.only(top: 8),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.dangerRed.withValues(alpha: 0.08),
+                border: Border.all(color: AppColors.dangerRed.withValues(alpha: 0.25)),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+                Text(_validationError ?? 'Value seems too high',
+                  style: const TextStyle(color: AppColors.dangerRed, fontSize: 12)),
+                const SizedBox(height: 8),
+                Row(children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: _applySuggestedIncome,
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.primaryTeal,
+                        side: const BorderSide(color: AppColors.primaryTeal),
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                      ),
+                      child: Text('Use ${_formatIndian(_suggestedIncome)}',
+                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  TextButton(
+                    onPressed: () => setState(() {
+                      _showCorruptionSuggestion = false;
+                      _validationError = null;
+                    }),
+                    child: const Text('My income is correct',
+                      style: TextStyle(color: Colors.white54, fontSize: 11)),
+                  ),
+                ]),
+              ]),
+            ),
           const SizedBox(height: 16),
           onboardingLabel('Monthly Expenses'),
           TextFormField(controller: _expenseCtrl, keyboardType: TextInputType.number,
+            inputFormatters: [FilteringTextInputFormatter.digitsOnly, CurrencyInputFormatter()],
             style: const TextStyle(color: Colors.white),
             decoration: onboardingInputDecoration('25000', prefix: '₹ ')),
           const SizedBox(height: 16),
           onboardingLabel('Current Savings'),
           TextFormField(controller: _savingsCtrl, keyboardType: TextInputType.number,
+            inputFormatters: [FilteringTextInputFormatter.digitsOnly, CurrencyInputFormatter()],
             style: const TextStyle(color: Colors.white),
             decoration: onboardingInputDecoration('200000', prefix: '₹ ')),
           const SizedBox(height: 16),
@@ -217,6 +369,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> with Sing
           const SizedBox(height: 16),
           onboardingLabel('Goal Amount'),
           TextFormField(controller: _goalAmountCtrl, keyboardType: TextInputType.number,
+            inputFormatters: [FilteringTextInputFormatter.digitsOnly, CurrencyInputFormatter()],
             style: const TextStyle(color: Colors.white),
             decoration: onboardingInputDecoration('15200000', prefix: '₹ ')),
           const SizedBox(height: 16),

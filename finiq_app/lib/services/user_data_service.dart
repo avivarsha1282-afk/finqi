@@ -413,4 +413,38 @@ class UserDataService {
     }
     return result;
   }
+
+  /// One-time migration to fix corrupted financial data from the
+  /// CurrencyInputFormatter double-formatting bug.
+  /// Returns true if corruption was detected and fixed (so UI can show banner).
+  static Future<bool> migrateCorruptedData() async {
+    final migrated = await UserPrefsService.getBool('data_migrated_v1');
+    if (migrated == true) return false;
+
+    bool foundCorruption = false;
+
+    // Sanity caps — raised to accommodate HNIs/business owners
+    const incomeMax = 500000000.0;   // ₹5 Crore/month
+    const savingsMax = 500000000.0;  // ₹50 Crore
+    const goalMax = 1000000000.0;    // ₹100 Crore
+
+    final fieldsToCheck = {
+      'monthly_income': incomeMax,
+      'monthly_expense': incomeMax,
+      'current_savings': savingsMax,
+      'goal_amount': goalMax,
+      'annual_income': incomeMax * 12,
+    };
+
+    for (final entry in fieldsToCheck.entries) {
+      final raw = await UserPrefsService.getDouble(entry.key);
+      if (raw != null && raw > entry.value) {
+        await UserPrefsService.setDouble(entry.key, 0.0);
+        foundCorruption = true;
+      }
+    }
+
+    await UserPrefsService.setBool('data_migrated_v1', true);
+    return foundCorruption;
+  }
 }

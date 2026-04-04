@@ -207,4 +207,14 @@ class ApiService {
       throw ApiException(_friendlyError(e), statusCode: e.response?.statusCode);
     }
   }
+
+  // ─── Generic GET helper ─────────────────────────────────────
+  Future<Map<String, dynamic>> getData(String path) async {
+    try {
+      final res = await _dio.get(path);
+      return res.data as Map<String, dynamic>;
+    } on DioException catch (e) {
+      throw ApiException(_friendlyError(e), statusCode: e.response?.statusCode);
+    }
+  }
 }

@@ -88,18 +88,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                             ],
                           ),
                         ),
-                        // Refresh button
+                        // Smart Buy Lens camera icon
                         IconButton(
-                          onPressed: _isRefreshing ? null : _refresh,
-                          icon: _isRefreshing
-                              ? const SizedBox(
-                                  width: 18, height: 18,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: AppColors.primaryTeal,
-                                  ),
-                                )
-                              : const Icon(Icons.refresh_rounded, color: AppColors.textSecondary, size: 22),
+                          onPressed: () => context.push('/smart-buy'),
+                          icon: const Icon(Icons.camera_alt_outlined, color: Colors.white, size: 22),
+                          tooltip: 'Smart Buy Lens',
                         ),
                         GestureDetector(
                           onTap: () => context.push('/profile'),
@@ -287,58 +280,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
                     const SizedBox(height: 16),
 
-                    // ── Smart Buy Lens Entry Card (NEW) ──────────────────
-                    GestureDetector(
-                      onTap: () => context.go('/smart-buy'),
-                      child: Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                            colors: [
-                              const Color(0xFF8B5CF6).withOpacity(0.12),
-                              AppColors.cardColor,
-                            ],
-                          ),
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: const Color(0xFF8B5CF6).withOpacity(0.3)),
-                        ),
-                        child: Row(
-                          children: [
-                            Container(
-                              width: 44, height: 44,
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF8B5CF6).withOpacity(0.15),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: const Icon(Icons.camera_alt_rounded, color: Color(0xFF8B5CF6), size: 22),
-                            ),
-                            const SizedBox(width: 14),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Text('Smart Buy Lens', style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w700)),
-                                  const SizedBox(height: 2),
-                                  Text('Snap a product → Get AI buy advice', style: TextStyle(color: AppColors.textTertiary, fontSize: 12)),
-                                ],
-                              ),
-                            ),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF8B5CF6).withOpacity(0.2),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: const Text('NEW', style: TextStyle(color: Color(0xFF8B5CF6), fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 1)),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ).animate(delay: 350.ms).fadeIn().slideX(begin: 0.05, end: 0),
-
-                    const SizedBox(height: 24),
 
                     // ── Artha Brief ─────────────────────────────────────
                     GestureDetector(

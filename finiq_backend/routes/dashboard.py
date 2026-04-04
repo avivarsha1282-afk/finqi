@@ -192,13 +192,13 @@ def get_dashboard():
 
     score = health_scores_collection.find_one(
         {'firebase_uid': uid}, {'_id': 0},
-    ) if health_scores_collection else None
+    ) if health_scores_collection is not None else None
     fire  = fire_plans_collection.find_one(
         {'firebase_uid': uid}, {'_id': 0},
-    ) if fire_plans_collection else None
+    ) if fire_plans_collection is not None else None
     tax   = tax_reports_collection.find_one(
         {'firebase_uid': uid}, {'_id': 0},
-    ) if tax_reports_collection else None
+    ) if tax_reports_collection is not None else None
 
     # ── Gemini Dashboard Brief (cached in MongoDB) ─────────────────────────
     gemini_dashboard = user.get('gemini_dashboard') if user else None
@@ -208,7 +208,7 @@ def get_dashboard():
         # Generate via Gemini and cache it
         gemini_dashboard = generate_gemini_dashboard_brief(user, profile, score, fire, tax)
         try:
-            if users_collection:
+            if users_collection is not None:
                 users_collection.update_one(
                     {'firebase_uid': uid},
                     {'$set': {
@@ -252,7 +252,7 @@ def update_profile():
         update_user_fields(uid, filtered)
         # Invalidate cached Gemini dashboard so it regenerates on next load
         try:
-            if users_collection:
+            if users_collection is not None:
                 users_collection.update_one(
                     {'firebase_uid': uid},
                     {'$unset': {'gemini_dashboard': ''}}

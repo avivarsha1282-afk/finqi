@@ -17,11 +17,16 @@ import '../../features/health_score/screens/dimension_detail_screen.dart';
 import '../../features/fire_planner/screens/fire_planner_screen.dart';
 import '../../features/tax_wizard/screens/tax_wizard_screen.dart';
 import '../../features/artha/screens/artha_chat_screen.dart';
+import '../../features/markets/screens/markets_screen.dart';
 import '../../features/profile/screens/profile_screen.dart';
 import '../../features/profile/screens/edit_profile_screen.dart';
 import '../../features/expenses/screens/expense_tracker_screen.dart';
-import '../../features/smart_buy/screens/smart_buy_screen.dart';
+import '../../features/smart_buy/screens/smart_buy_mode_screen.dart';
+import '../../features/smart_buy/screens/smart_buy_input_screen.dart';
+import '../../features/smart_buy/screens/smart_buy_single_result_screen.dart';
+import '../../features/smart_buy/screens/smart_buy_compare_result_screen.dart';
 import '../../services/user_prefs_service.dart';
+import 'dart:typed_data';
 
 
 final _rootNavigatorKey = GlobalKey<NavigatorState>();
@@ -84,6 +89,28 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (_, __) => const EditProfileScreen(),
       ),
 
+      // Smart Buy Lens — 4 screen flow (pushed on top, not inside shell)
+      GoRoute(
+        path: '/smart-buy',
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (_, __) => const SmartBuyModeScreen(),
+      ),
+      GoRoute(
+        path: '/smart-buy/input',
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (_, state) => SmartBuyInputScreen(mode: state.extra as String? ?? 'single'),
+      ),
+      GoRoute(
+        path: '/smart-buy/result/single',
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (_, state) => SmartBuySingleResultScreen(images: state.extra as List<Uint8List>),
+      ),
+      GoRoute(
+        path: '/smart-buy/result/compare',
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (_, state) => SmartBuyCompareResultScreen(images: state.extra as List<Uint8List>),
+      ),
+
       // Shell with bottom nav: Home | Health | FIRE | Artha | Tax
       ShellRoute(
         navigatorKey: _shellNavigatorKey,
@@ -100,10 +127,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             ),
           ),
           GoRoute(path: '/fire', builder: (_, __) => const FirePlannerScreen()),
+          GoRoute(path: '/markets', builder: (_, __) => const MarketsScreen()),
           GoRoute(path: '/artha', builder: (_, __) => const ArthaChatScreen()),
           GoRoute(path: '/tax', builder: (_, __) => const TaxWizardScreen()),
           GoRoute(path: '/expenses', builder: (_, __) => const ExpenseTrackerScreen()),
-          GoRoute(path: '/smart-buy', builder: (_, __) => const SmartBuyScreen()),
         ],
       ),
     ],
@@ -124,8 +151,9 @@ class ScaffoldWithBottomNav extends StatelessWidget {
   int _selectedIndex(String path) {
     if (path.startsWith('/health')) return 1;
     if (path.startsWith('/fire')) return 2;
-    if (path.startsWith('/artha')) return 3;
-    if (path.startsWith('/tax')) return 4;
+    if (path.startsWith('/markets')) return 3;
+    if (path.startsWith('/artha')) return 4;
+    if (path.startsWith('/tax')) return 5;
     return 0; // home
   }
 
@@ -134,7 +162,7 @@ class ScaffoldWithBottomNav extends StatelessWidget {
     final idx = _selectedIndex(currentPath);
     return Scaffold(
       body: child,
-      floatingActionButton: currentPath != '/expenses' && currentPath != '/artha'
+      floatingActionButton: currentPath != '/expenses' && currentPath != '/artha' && currentPath != '/markets'
           ? FloatingActionButton.extended(
               heroTag: 'fab_add_expense',
               onPressed: () => context.go('/expenses'),
@@ -156,14 +184,19 @@ class ScaffoldWithBottomNav extends StatelessWidget {
               case 0: context.go('/home'); break;
               case 1: context.go('/health'); break;
               case 2: context.go('/fire'); break;
-              case 3: context.go('/artha'); break;
-              case 4: context.go('/tax'); break;
+              case 3: context.go('/markets'); break;
+              case 4: context.go('/artha'); break;
+              case 5: context.go('/tax'); break;
             }
           },
+          selectedFontSize: 10,
+          unselectedFontSize: 10,
+          iconSize: 22,
           items: const [
             BottomNavigationBarItem(icon: Icon(Icons.home_rounded), label: 'Home'),
             BottomNavigationBarItem(icon: Icon(Icons.favorite_rounded), label: 'Health'),
             BottomNavigationBarItem(icon: Icon(Icons.local_fire_department_rounded), label: 'FIRE'),
+            BottomNavigationBarItem(icon: Icon(Icons.candlestick_chart_outlined), activeIcon: Icon(Icons.candlestick_chart), label: 'Markets'),
             BottomNavigationBarItem(icon: Icon(Icons.auto_awesome_rounded), label: 'Artha'),
             BottomNavigationBarItem(icon: Icon(Icons.receipt_long_rounded), label: 'Tax'),
           ],

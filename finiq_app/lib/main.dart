@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'app.dart';
 import 'services/api_service.dart';
 import 'services/cache_service.dart';
+import 'services/user_data_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -31,6 +32,13 @@ void main() async {
 
   // Initialize API service
   ApiService.instance.init();
+
+  // One-time migration: fix corrupted financial data from formatting bug
+  UserDataService.migrateCorruptedData().then((wasCorrupted) {
+    if (wasCorrupted) {
+      debugPrint('FinIQ: Data migration detected and fixed corrupted financial values');
+    }
+  });
 
   runApp(
     const ProviderScope(

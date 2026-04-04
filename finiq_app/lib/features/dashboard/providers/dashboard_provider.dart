@@ -165,24 +165,24 @@ Future<DashboardData> _buildDashboardData(Map<String, dynamic> profile, bool off
   final timeline = fireMap != null ? (fireMap['timeline'] as List).map((e) => ChartDataPoint(year: (e['year'] as num).toInt(), corpus: (e['corpus'] as num).toDouble())).toList() : MockDataService.generateTimeline(
     currentSavings: currentSavings,
     monthlySip: sip,
-    years: goalYears,
+    years: goalYearsInt,
   );
 
   final firePlan = FirePlanModel(
     targetCorpus: goalAmount,
-    targetYears: goalYears,
+    targetYears: goalYearsInt,
     currentSavings: currentSavings,
     requiredMonthlySip: sip,
     projectedCorpus: goalAmount,
     estimatedReturn: 12.0,
     scenarios: [
       FireScenario(
-        years: (goalYears / 2).ceil(),
+        years: (goalYearsInt / 2).ceil(),
         label: 'Hyper-Aggressive',
-        monthlySip: MockDataService.calculateSIP(targetAmount: goalAmount, currentSavings: currentSavings, years: (goalYears / 2).ceil()),
+        monthlySip: MockDataService.calculateSIP(targetAmount: goalAmount, currentSavings: currentSavings, years: (goalYearsInt / 2).ceil()),
         risk: 'HIGH RISK',
       ),
-      FireScenario(years: goalYears, label: 'Sustainable Growth', monthlySip: sip, risk: 'RECOMMENDED', isRecommended: true),
+      FireScenario(years: goalYearsInt, label: 'Sustainable Growth', monthlySip: sip, risk: 'RECOMMENDED', isRecommended: true),
     ],
     assetAllocation: const [
       AssetAllocation(name: 'Equity', percentage: 40, colorHex: '#00C896'),

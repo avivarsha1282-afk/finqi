@@ -3,18 +3,21 @@ import 'package:flutter/foundation.dart';
 class ApiConstants {
   ApiConstants._();
 
-  // ── ENVIRONMENTS ────────────────────────────────────
-  static const String _railway =
+  // ── ENVIRONMENT TOGGLE ──────────────────────────────────
+  // Set to true before Railway deploy, false for local dev
+  static const bool isProduction = false;
+
+  // ── ENVIRONMENTS ────────────────────────────────────────
+  static const String _prodBaseUrl =
       'https://finiq-backend-production.up.railway.app';
 
-  // Physical device via ADB reverse tunnel: 127.0.0.1
-  // Run: adb reverse tcp:5000 tcp:5000
-  static const String _local = 'http://127.0.0.1:5000';
+  // Physical device on same Wi-Fi — use laptop's LAN IP
+  // Find via: ipconfig (Windows) / ifconfig (Mac/Linux)
+  static const String _devBaseUrl = 'http://10.240.191.92:5000';
 
-  // Auto-switch: Release build → Railway, Debug → Railway (change to _local if running Flask locally)
-  static String get baseUrl => _railway;
+  static String get baseUrl => isProduction ? _prodBaseUrl : _devBaseUrl;
 
-  // ── ENDPOINTS ───────────────────────────────────────
+  // ── ENDPOINTS ───────────────────────────────────────────
   static const String onboardingSave = '/api/onboarding/save';
   static const String dashboard = '/api/user/dashboard';
   static const String healthScore = '/api/score/calculate';
@@ -25,9 +28,9 @@ class ApiConstants {
   static const String smartBuyCompare = '/api/smart-buy/compare';
   static const String ping = '/ping';
 
-  // ── TIMEOUTS ────────────────────────────────────────
-  static const int connectTimeoutSec = 10;
-  static const int receiveTimeoutSec = 30;
+  // ── TIMEOUTS ────────────────────────────────────────────
+  static const int connectTimeoutSec = 30;
+  static const int receiveTimeoutSec = 120;
 
   // Demo mode — should ALWAYS be false for production
   static const bool demoMode = false;

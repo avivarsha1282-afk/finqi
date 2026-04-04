@@ -53,6 +53,7 @@ dependencies:
 
   # Smart Buy Lens
   image_picker: ^1.1.2
+  url_launcher: ^6.2.0
   permission_handler: ^11.3.1
 
   # Offline Caching

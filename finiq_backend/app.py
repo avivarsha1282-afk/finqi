@@ -61,6 +61,13 @@ try:
 except ImportError:
     pass  # smart_buy.py not created yet
 
+# Markets (Phase 8)
+try:
+    from routes.markets import markets_bp
+    app.register_blueprint(markets_bp, url_prefix='/api')
+except ImportError:
+    pass
+
 # ── Health Check ─────────────────────────────────────────────────────────────
 @app.route('/ping')
 def ping():
@@ -75,7 +82,10 @@ def root():
         'endpoints': [
             '/ping', '/api/auth/verify', '/api/onboarding/save',
             '/api/score/calculate', '/api/fire/plan', '/api/tax/compare',
-            '/api/user/dashboard', '/api/chat/message', '/api/smart-buy/compare'
+            '/api/user/dashboard', '/api/chat/message', '/api/smart-buy/compare',
+            '/api/markets/overview', '/api/markets/movers',
+            '/api/markets/watchlist-quotes', '/api/markets/search',
+            '/api/markets/artha-insight',
         ]
     }), 200
 
