@@ -130,7 +130,57 @@ class _ArthaCardState extends ConsumerState<ArthaCard> {
     );
   }
 }
+// ═══════════════════════════════════════════════════════════
+// GLOBAL INDICES
+// ═══════════════════════════════════════════════════════════
 
+class GlobalIndicesStrip extends StatelessWidget {
+  final Map<String, StockQuote> globalIndices;
+  const GlobalIndicesStrip({super.key, required this.globalIndices});
+
+  @override
+  Widget build(BuildContext context) {
+    if (globalIndices.isEmpty) return const SizedBox.shrink();
+    
+    return Padding(
+      padding: const EdgeInsets.only(top: 10, bottom: 20),
+      child: Row(
+        children: [
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 16),
+            child: Row(children: [
+              Icon(Icons.schedule, size: 12, color: Colors.white38),
+              SizedBox(width: 4),
+              Text('Opens tomorrow 9:15 AM IST', style: TextStyle(fontSize: 11, color: Colors.white38)),
+              SizedBox(width: 16),
+              Text('~15 min delay', style: TextStyle(fontSize: 11, color: Colors.white38)),
+            ]),
+          ),
+          Expanded(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: globalIndices.entries.map((e) {
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 16),
+                    child: Row(
+                      children: [
+                        Text(e.value.displayName, style: TextStyle(fontSize: 12, color: Colors.white.withValues(alpha: 0.70), fontWeight: FontWeight.w500)),
+                        const SizedBox(width: 4),
+                        Text('${e.value.changePct >= 0 ? "+" : ""}${e.value.changePct.toStringAsFixed(1)}%', 
+                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: e.value.changePct >= 0 ? _teal : _red)),
+                      ],
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+          )
+        ],
+      )
+    );
+  }
+}
 
 // ═══════════════════════════════════════════════════════════
 // FII / DII — FIX 9: compute net, validate
