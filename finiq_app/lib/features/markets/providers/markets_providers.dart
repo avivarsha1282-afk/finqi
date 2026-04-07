@@ -22,6 +22,14 @@ final marketsNewsProvider = FutureProvider.autoDispose<List<MarketNews>>((ref) a
   return MarketsService.instance.getNews();
 });
 
+final marketsIPOProvider = FutureProvider.autoDispose<IPOData>((ref) async {
+  return MarketsService.instance.getIPOs();
+});
+
+final weeklyBriefProvider = FutureProvider.autoDispose<WeeklyBrief>((ref) async {
+  return MarketsService.instance.getWeeklyBrief();
+});
+
 // ── Watchlist ──
 class WatchlistNotifier extends StateNotifier<List<WatchlistStock>> {
   WatchlistNotifier() : super([]) { _loadFromPrefs(); }
@@ -57,6 +65,37 @@ class WatchlistNotifier extends StateNotifier<List<WatchlistStock>> {
   }
 
   bool isWatching(String symbol) => state.any((s) => s.symbol == symbol);
+
+  WatchlistStock? getStock(String symbol) {
+    final idx = state.indexWhere((s) => s.symbol == symbol);
+    return idx >= 0 ? state[idx] : null;
+  }
+
+  Future<void> updateStock(String symbol, {double? alertPrice, int? qty, double? avgBuyPrice}) async {
+    final idx = state.indexWhere((s) => s.symbol == symbol);
+    if (idx < 0) return;
+    final old = state[idx];
+    final updated = WatchlistStock(
+      symbol: old.symbol,
+      displayName: old.displayName,
+      alertPrice: alertPrice ?? old.alertPrice,
+      qty: qty ?? old.qty,
+      avgBuyPrice: avgBuyPrice ?? old.avgBuyPrice,
+    );
+    state = [...state.sublist(0, idx), updated, ...state.sublist(idx + 1)];
+    await _saveToPrefs();
+  }
+
+  Future<void> clearAlert(String symbol) async {
+    final idx = state.indexWhere((s) => s.symbol == symbol);
+    if (idx < 0) return;
+    final old = state[idx];
+    final updated = WatchlistStock(
+      symbol: old.symbol, displayName: old.displayName,
+      alertPrice: null, qty: old.qty, avgBuyPrice: old.avgBuyPrice);
+    state = [...state.sublist(0, idx), updated, ...state.sublist(idx + 1)];
+    await _saveToPrefs();
+  }
 }
 
 final watchlistProvider = StateNotifierProvider<WatchlistNotifier, List<WatchlistStock>>(

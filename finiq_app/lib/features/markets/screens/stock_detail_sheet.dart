@@ -2,6 +2,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:fl_chart/fl_chart.dart';
 import '../models/market_models.dart';
 import '../providers/markets_providers.dart';
 import '../services/markets_service.dart';
@@ -20,10 +21,19 @@ class _StockDetailSheetState extends ConsumerState<StockDetailSheet> {
   StockQuote? _detail;
   bool _loadingDetail = true;
 
+  // Chart state
+  String _selectedPeriod = '1d';
+  bool _loadingChart = false;
+  ChartData? _chartData;
+  static const _periods = ['1D', '1W', '1M', '3M', '6M', '1Y', '5Y'];
+  static const _periodApi = {'1D': '1d', '1W': '1w', '1M': '1mo', '3M': '3mo', '6M': '6mo', '1Y': '1y', '5Y': '5y'};
+  static const _periodLabel = {'1D': 'today', '1W': '1 week', '1M': '1 month', '3M': '3 months', '6M': '6 months', '1Y': '1 year', '5Y': '5 years'};
+
   @override
   void initState() {
     super.initState();
     _loadDetail();
+    _loadChart('1D');
   }
 
   void _loadDetail() async {
@@ -35,8 +45,19 @@ class _StockDetailSheetState extends ConsumerState<StockDetailSheet> {
     }
   }
 
+  Future<void> _loadChart(String period) async {
+    final apiPeriod = _periodApi[period] ?? '1d';
+    setState(() { _selectedPeriod = period; _loadingChart = true; });
+    try {
+      final data = await MarketsService.instance.getChart(symbol: widget.quote.symbol, period: apiPeriod);
+      if (mounted) setState(() { _chartData = data; _loadingChart = false; });
+    } catch (_) {
+      if (mounted) setState(() => _loadingChart = false);
+    }
+  }
+
   String _fmtPrice(double p) {
-    if (p >= 1000) return '₹${NumberFormat('#,##0', 'en_IN').format(p.round())}';
+    if (p >= 1000) return '₹${NumberFormat('#,##,###', 'en_IN').format(p.round())}';
     return '₹${p.toStringAsFixed(2)}';
   }
 
@@ -48,10 +69,10 @@ class _StockDetailSheetState extends ConsumerState<StockDetailSheet> {
   }
 
   String _fmtMarketCap(int? mc) {
-    if (mc == null) return 'N/A';
+    if (mc == null) return '—'; // BUG 3 fix
     final cr = mc / 10000000;
     if (cr >= 100000) return '₹${(cr / 100000).toStringAsFixed(1)}L Cr';
-    if (cr >= 1000) return '₹${NumberFormat('#,##0', 'en_IN').format(cr.round())} Cr';
+    if (cr >= 1000) return '₹${NumberFormat('#,##,###', 'en_IN').format(cr.round())} Cr';
     return '₹${cr.toStringAsFixed(0)} Cr';
   }
 
@@ -70,6 +91,9 @@ class _StockDetailSheetState extends ConsumerState<StockDetailSheet> {
     final sign = q.isPositive ? '+' : '';
     final isWatching = ref.watch(watchlistProvider).any((s) => s.symbol == q.symbol);
 
+    // BUG 1 fix: use display name mapping for indices
+    final title = getDisplayName(q.symbol, q.displayName);
+
     return DraggableScrollableSheet(
       initialChildSize: 0.7, maxChildSize: 0.92, minChildSize: 0.4,
       builder: (_, sc) => Container(
@@ -83,10 +107,10 @@ class _StockDetailSheetState extends ConsumerState<StockDetailSheet> {
             decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.20), borderRadius: BorderRadius.circular(2)))),
           const SizedBox(height: 20),
 
-          // Header
+          // Header — BUG 1 fix: show human-readable name
           Row(children: [
             Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(q.displayName, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: Colors.white)),
+              Text(title, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: Colors.white)),
               Text(q.cleanSymbol, style: TextStyle(fontSize: 13, color: Colors.white.withValues(alpha: 0.38))),
             ])),
             IconButton(
@@ -94,7 +118,7 @@ class _StockDetailSheetState extends ConsumerState<StockDetailSheet> {
                 color: isWatching ? _teal : Colors.white.withValues(alpha: 0.38), size: 24),
               onPressed: () {
                 final n = ref.read(watchlistProvider.notifier);
-                isWatching ? n.removeStock(q.symbol) : n.addStock(WatchlistStock(symbol: q.symbol, displayName: q.displayName));
+                isWatching ? n.removeStock(q.symbol) : n.addStock(WatchlistStock(symbol: q.symbol, displayName: title));
               }),
           ]),
           const SizedBox(height: 20),
@@ -112,15 +136,62 @@ class _StockDetailSheetState extends ConsumerState<StockDetailSheet> {
             Flexible(child: Text('vs prev close ${_fmtPrice(q.prevClose)}',
               style: TextStyle(fontSize: 12, color: Colors.white.withValues(alpha: 0.38)), overflow: TextOverflow.ellipsis)),
           ]),
-          const SizedBox(height: 24),
+          const SizedBox(height: 20),
 
-          // Large sparkline
-          if (q.sparkline.length >= 2) ...[
-            SizedBox(height: 180, child: CustomPaint(
-              painter: _LargeSparkPainter(data: q.sparkline, isPositive: q.isPositive, prevClose: q.prevClose),
-              size: Size.infinite)),
-            const SizedBox(height: 24),
+          // ═══════════════════════════════════════════
+          // PERIOD SELECTOR
+          // ═══════════════════════════════════════════
+          SizedBox(
+            height: 34,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: _periods.length,
+              separatorBuilder: (_, __) => const SizedBox(width: 6),
+              itemBuilder: (_, i) {
+                final p = _periods[i];
+                final selected = _selectedPeriod == p;
+                return GestureDetector(
+                  onTap: () => _loadChart(p),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: selected ? _teal.withValues(alpha: 0.15) : Colors.white.withValues(alpha: 0.05),
+                      borderRadius: BorderRadius.circular(20),
+                      border: selected ? Border.all(color: _teal.withValues(alpha: 0.50)) : null),
+                    child: Text(p, style: TextStyle(fontSize: 12, fontWeight: selected ? FontWeight.w700 : FontWeight.w400,
+                      color: selected ? _teal : Colors.white.withValues(alpha: 0.38))),
+                  ),
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // ═══════════════════════════════════════════
+          // CHART (fl_chart LineChart)
+          // ═══════════════════════════════════════════
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 300),
+            child: _loadingChart
+              ? SizedBox(key: const ValueKey('loading'), height: 200,
+                  child: const Center(child: CircularProgressIndicator(strokeWidth: 2, color: _teal)))
+              : (_chartData != null && _chartData!.candles.isNotEmpty)
+                ? SizedBox(key: ValueKey(_selectedPeriod), height: 200, child: _buildLineChart(_chartData!))
+                : SizedBox(key: const ValueKey('empty'), height: 200,
+                    child: q.sparkline.length >= 2
+                      ? CustomPaint(painter: _LargeSparkPainter(data: q.sparkline, isPositive: q.isPositive, prevClose: q.prevClose), size: Size.infinite)
+                      : Center(child: Text('Chart unavailable', style: TextStyle(fontSize: 13, color: Colors.white.withValues(alpha: 0.38))))),
+          ),
+
+          // ═══════════════════════════════════════════
+          // PERIOD PERFORMANCE ROW
+          // ═══════════════════════════════════════════
+          if (_chartData != null && _chartData!.candles.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            _buildPeriodPerfRow(_chartData!),
           ],
+          const SizedBox(height: 20),
 
           // Day stats
           Row(children: [
@@ -142,20 +213,19 @@ class _StockDetailSheetState extends ConsumerState<StockDetailSheet> {
               color: Colors.white.withValues(alpha: 0.38), letterSpacing: 0.8)),
             const SizedBox(height: 10),
             LayoutBuilder(builder: (_, constraints) {
-              final barW = constraints.maxWidth - 100; // space for labels
               final range = q.week52High - q.week52Low;
               final pos = range > 0 ? ((q.current - q.week52Low) / range).clamp(0.0, 1.0) : 0.5;
               final pctFrom52H = q.week52High > 0 ? ((q.week52High - q.current) / q.week52High * 100) : 0;
-              return Column(children: [
+              return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Row(children: [
                   SizedBox(width: 50, child: Text(_fmtPrice(q.week52Low), style: TextStyle(fontSize: 12, color: Colors.white.withValues(alpha: 0.54)))),
                   Expanded(child: SizedBox(height: 16, child: Stack(children: [
                     Positioned(top: 5, left: 0, right: 0, child: Container(height: 4,
                       decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.10), borderRadius: BorderRadius.circular(2)))),
-                    Positioned(top: 2, left: pos * (barW > 0 ? barW : constraints.maxWidth - 112),
+                    Positioned(top: 2, left: pos * (constraints.maxWidth - 112),
                       child: Container(width: 12, height: 12,
                         decoration: BoxDecoration(color: _teal, shape: BoxShape.circle,
-                          border: Border.all(color: const Color(0xFF0A0A0A), width: 2)))),
+                          border: Border.all(color: const Color(0xFF141414), width: 2)))),
                   ]))),
                   SizedBox(width: 50, child: Text(_fmtPrice(q.week52High),
                     style: TextStyle(fontSize: 12, color: Colors.white.withValues(alpha: 0.54)), textAlign: TextAlign.right)),
@@ -167,17 +237,17 @@ class _StockDetailSheetState extends ConsumerState<StockDetailSheet> {
             }),
           ],
 
-          // PE + Market Cap
-          if (!_loadingDetail && (q.pe != null || q.marketCap != null)) ...[
+          // PE + Market Cap — BUG 3 fix: "—" instead of "N/A", always show cells after loading
+          if (!_loadingDetail) ...[
             const SizedBox(height: 16),
             Row(children: [
-              Expanded(child: _StatCell(label: 'P/E Ratio', value: q.pe != null ? q.pe!.toStringAsFixed(1) : 'N/A')),
+              Expanded(child: _StatCell(label: 'P/E Ratio', value: q.pe != null ? q.pe!.toStringAsFixed(1) : '—')),
               const SizedBox(width: 12),
               Expanded(child: _StatCell(label: 'Market Cap', value: _fmtMarketCap(q.marketCap))),
             ]),
           ],
 
-          // Loading indicator for detail data
+          // Loading indicator
           if (_loadingDetail) ...[
             const SizedBox(height: 16),
             Row(mainAxisAlignment: MainAxisAlignment.center, children: [
@@ -199,7 +269,7 @@ class _StockDetailSheetState extends ConsumerState<StockDetailSheet> {
               const CircleAvatar(radius: 12, backgroundColor: _teal,
                 child: Text('A', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 10))),
               const SizedBox(width: 8),
-              Expanded(child: Text(_microInsight(q.displayName, q.changePct, q.high, q.low, q.current),
+              Expanded(child: Text(_microInsight(title, q.changePct, q.high, q.low, q.current),
                 style: const TextStyle(fontSize: 12, color: Colors.white70, height: 1.5))),
             ])),
 
@@ -209,6 +279,77 @@ class _StockDetailSheetState extends ConsumerState<StockDetailSheet> {
         ]),
       ),
     );
+  }
+
+  // ═══════════════════════════════════════════
+  // FL_CHART LINE CHART
+  // ═══════════════════════════════════════════
+  Widget _buildLineChart(ChartData data) {
+    final spots = <FlSpot>[];
+    for (int i = 0; i < data.candles.length; i++) {
+      spots.add(FlSpot(i.toDouble(), data.candles[i].close));
+    }
+    final isPos = data.isPositive;
+    final color = isPos ? _teal : _red;
+
+    return LineChart(LineChartData(
+      gridData: const FlGridData(show: false),
+      titlesData: const FlTitlesData(show: false),
+      borderData: FlBorderData(show: false),
+      lineTouchData: LineTouchData(
+        handleBuiltInTouches: true,
+        touchTooltipData: LineTouchTooltipData(
+          getTooltipColor: (_) => const Color(0xFF1E1E1E),
+          tooltipRoundedRadius: 8,
+          getTooltipItems: (touchedSpots) => touchedSpots.map((s) {
+            final idx = s.spotIndex.clamp(0, data.candles.length - 1);
+            final candle = data.candles[idx];
+            final ts = candle.timestamp;
+            final dateStr = ts.length >= 10 ? ts.substring(0, 10) : '';
+            return LineTooltipItem(
+              '${_fmtPrice(s.y)}\n$dateStr',
+              TextStyle(fontSize: 12, color: color, fontWeight: FontWeight.w600, height: 1.4),
+            );
+          }).toList(),
+        ),
+      ),
+      lineBarsData: [LineChartBarData(
+        spots: spots, isCurved: true, curveSmoothness: 0.3,
+        color: color, barWidth: 2,
+        dotData: const FlDotData(show: false),
+        belowBarData: BarAreaData(show: true,
+          gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter,
+            colors: [color.withValues(alpha: 0.20), color.withValues(alpha: 0.0)])),
+      )],
+    ));
+  }
+
+  // ═══════════════════════════════════════════
+  // PERIOD PERFORMANCE ROW
+  // ═══════════════════════════════════════════
+  Widget _buildPeriodPerfRow(ChartData data) {
+    final change = data.change;
+    final pct = data.changePct;
+    final isPos = change >= 0;
+    final color = isPos ? _teal : _red;
+    final s = isPos ? '+' : '';
+    final labelMap = _periodLabel[_selectedPeriod] ?? _selectedPeriod.toLowerCase();
+
+    return Row(children: [
+      Text('$s${_fmtPrice(change.abs())}',
+        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: color)),
+      const SizedBox(width: 8),
+      Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(6)),
+        child: Text('$s${pct.toStringAsFixed(2)}%',
+          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: color)),
+      ),
+      const SizedBox(width: 8),
+      Flexible(child: Text('in $labelMap',
+        style: TextStyle(fontSize: 12, color: Colors.white.withValues(alpha: 0.38)),
+        overflow: TextOverflow.ellipsis)),
+    ]);
   }
 }
 

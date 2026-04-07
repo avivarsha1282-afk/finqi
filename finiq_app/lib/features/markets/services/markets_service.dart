@@ -93,4 +93,34 @@ class MarketsService {
       rethrow;
     }
   }
+
+  Future<ChartData> getChart({required String symbol, String period = '1d'}) async {
+    try {
+      final res = await ApiService.instance.getData('/markets/chart?symbol=$symbol&period=$period');
+      return ChartData.fromJson(res);
+    } catch (e) {
+      debugPrint('[MarketsService] chart error: $e');
+      rethrow;
+    }
+  }
+
+  Future<IPOData> getIPOs() async {
+    try {
+      final res = await ApiService.instance.getData('/markets/ipos');
+      return IPOData.fromJson(res);
+    } catch (e) {
+      debugPrint('[MarketsService] ipos error: $e');
+      rethrow;
+    }
+  }
+
+  Future<WeeklyBrief> getWeeklyBrief() async {
+    try {
+      final res = await ApiService.instance.getData('/markets/weekly-brief');
+      return WeeklyBrief.fromJson(res);
+    } catch (e) {
+      debugPrint('[MarketsService] weekly-brief error: $e');
+      rethrow;
+    }
+  }
 }

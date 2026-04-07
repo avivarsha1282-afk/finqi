@@ -109,6 +109,14 @@ NIFTY50_STOCKS = {
     "Dmart":         "DMART.NS",
 }
 
+COMMODITY_SYMBOLS = {
+    "Gold":        "GC=F",
+    "Silver":      "SI=F",
+    "Crude Oil":   "CL=F",
+    "Natural Gas": "NG=F",
+}
+
+
 
 # ═══════════════════════════════════════════════════════════
 # HELPERS
@@ -127,11 +135,12 @@ def is_market_open() -> bool:
 
 
 def fetch_quote(symbol: str, display_name: str = '') -> dict:
-    """Fetch a single quote from Yahoo Finance using fast_info."""
-    try:
-        ticker = yf.Ticker(symbol)
-        info = ticker.fast_info
+    """Fetch a single quote from Yahoo Finance using fast_info.
+    If price is 0 and symbol ends with .NS, tries .BO (BSE) as fallback."""
 
+    def _try_fetch(sym: str):
+        ticker = yf.Ticker(sym)
+        info = ticker.fast_info
         current = float(info.last_price or 0)
         prev_close = float(info.previous_close or 0)
         change = current - prev_close
@@ -147,8 +156,8 @@ def fetch_quote(symbol: str, display_name: str = '') -> dict:
             pass
 
         return {
-            'symbol': symbol,
-            'displayName': display_name or symbol,
+            'symbol': sym,
+            'displayName': display_name or sym,
             'current': round(current, 2),
             'change': round(change, 2),
             'changePct': round(change_pct, 2),
@@ -159,6 +168,26 @@ def fetch_quote(symbol: str, display_name: str = '') -> dict:
             'sparkline': sparkline,
             'isPositive': change >= 0,
         }
+
+    try:
+        result = _try_fetch(symbol)
+
+        # BUG 2 fix: BSE fallback if NSE returns 0
+        if result['current'] == 0 and symbol.endswith('.NS'):
+            bse_sym = symbol.replace('.NS', '.BO')
+            print(f'[MARKETS] {symbol} returned ₹0, trying BSE fallback: {bse_sym}')
+            try:
+                result = _try_fetch(bse_sym)
+                result['symbol'] = symbol  # keep original symbol for consistency
+                result['displayName'] = display_name or symbol
+            except Exception:
+                pass
+
+        # If still 0, mark as error
+        if result['current'] == 0:
+            result['error'] = 'unavailable'
+
+        return result
     except Exception as e:
         print(f'[MARKETS] Error fetching {symbol}: {e}')
         return {
@@ -180,7 +209,7 @@ def fetch_stock_detail(symbol: str, display_name: str = '') -> dict:
         info = ticker.info or {}
         base['week52High'] = round(float(info.get('fiftyTwoWeekHigh', 0) or 0), 2)
         base['week52Low'] = round(float(info.get('fiftyTwoWeekLow', 0) or 0), 2)
-        pe = info.get('trailingPE')
+        pe = info.get('trailingPE') or info.get('forwardPE')
         base['pe'] = round(float(pe), 1) if pe else None
         mc = info.get('marketCap')
         base['marketCap'] = int(mc) if mc else None
@@ -273,6 +302,65 @@ def get_market_overview():
     else:
         sentiment = 'NEUTRAL'
 
+    # ── Commodities with correct INR conversion ──
+    commodities_data = {}
+    try:
+        # Step 1: Get live USD/INR rate
+        try:
+            forex_ticker = yf.Ticker('USDINR=X')
+            usd_inr = float(forex_ticker.fast_info.last_price or 84.5)
+        except Exception:
+            usd_inr = 84.5
+
+        TROY_OZ_GRAMS = 31.1035
+        INDIA_PREMIUM = 1.075  # 7.5% customs+GST approximation
+
+        for cname, csymbol in COMMODITY_SYMBOLS.items():
+            try:
+                ct = yf.Ticker(csymbol)
+                ci = ct.fast_info
+                usd_price = float(ci.last_price or 0)
+                prev_close = float(ci.previous_close or 0)
+
+                if csymbol == 'GC=F':  # Gold: USD/troy oz → ₹/10g
+                    price_inr = (usd_price / TROY_OZ_GRAMS) * 10 * usd_inr * INDIA_PREMIUM
+                    prev_inr  = (prev_close / TROY_OZ_GRAMS) * 10 * usd_inr * INDIA_PREMIUM
+                    unit = 'per 10g · 24K'
+                    print(f'[GOLD] USD: {usd_price}, INR rate: {usd_inr}, per 10g INR: {price_inr:.0f}')
+                    if not (140000 <= price_inr <= 160000):
+                        print(f'WARNING: Gold price {price_inr:.0f} outside expected range!')
+                elif csymbol == 'SI=F':  # Silver: USD/troy oz → ₹/kg
+                    price_inr = (usd_price / TROY_OZ_GRAMS) * 1000 * usd_inr * INDIA_PREMIUM
+                    prev_inr  = (prev_close / TROY_OZ_GRAMS) * 1000 * usd_inr * INDIA_PREMIUM
+                    unit = 'per kg'
+                    print(f'[SILVER] USD: {usd_price}, INR rate: {usd_inr}, per kg INR: {price_inr:.0f}')
+                elif csymbol == 'CL=F':  # Crude Oil: USD/barrel → ₹/barrel
+                    price_inr = usd_price * usd_inr
+                    prev_inr  = prev_close * usd_inr
+                    unit = 'per barrel'
+                    print(f'[CRUDE] USD: {usd_price}, INR rate: {usd_inr}, per barrel INR: {price_inr:.0f}')
+                else:  # Natural Gas: USD/MMBtu → ₹/MMBtu
+                    price_inr = usd_price * usd_inr
+                    prev_inr  = prev_close * usd_inr
+                    unit = 'per MMBtu'
+
+                change_inr = price_inr - prev_inr
+                change_pct = (change_inr / prev_inr * 100) if prev_inr > 0 else 0
+
+                commodities_data[cname] = {
+                    'displayName': cname,
+                    'symbol': csymbol,
+                    'current': round(usd_price, 2),
+                    'priceINR': round(price_inr),
+                    'unit': unit,
+                    'changePct': round(change_pct, 2),
+                    'isPositive': change_inr >= 0,
+                }
+            except Exception as e:
+                print(f'[COMMODITY] Error fetching {cname}: {e}')
+    except Exception as e:
+        print(f'[COMMODITY] Global error: {e}')
+
     result = {
         'isMarketOpen': market_open,
         'lastUpdated': datetime.now(IST).isoformat(),
@@ -280,6 +368,7 @@ def get_market_overview():
         'indices': indices_data,
         'sectors': sectors_data,
         'global': global_data,
+        'commodities': commodities_data,
     }
 
     _overview_cache['data'] = result
@@ -306,7 +395,29 @@ def get_market_movers():
     gainers = sorted(valid, key=lambda x: x['changePct'], reverse=True)[:5]
     losers = sorted(valid, key=lambda x: x['changePct'])[:5]
 
-    result = {'gainers': gainers, 'losers': losers}
+    # Volume shockers: stocks with 2x+ average volume
+    volume_shockers = []
+    for quote in (gainers + losers):
+        try:
+            sym = quote['symbol']
+            avg_vol = quote.get('volume', 0)
+            if avg_vol <= 0:
+                continue
+            ticker = yf.Ticker(sym)
+            hist_today = ticker.history(period='1d', interval='1d')
+            if hist_today is not None and not hist_today.empty:
+                today_vol = int(hist_today['Volume'].iloc[-1])
+                ratio = today_vol / avg_vol if avg_vol > 0 else 0
+                if ratio >= 2.0:
+                    quote['todayVolume'] = today_vol
+                    quote['avgVolume'] = avg_vol
+                    quote['volumeRatio'] = round(ratio, 1)
+                    volume_shockers.append(quote)
+        except Exception:
+            pass
+    volume_shockers.sort(key=lambda x: x.get('volumeRatio', 0), reverse=True)
+
+    result = {'gainers': gainers, 'losers': losers, 'volumeShockers': volume_shockers[:5]}
     _movers_cache['data'] = result
     _movers_cache['ts'] = now
     return jsonify(result), 200
@@ -376,6 +487,9 @@ USER PROFILE:
 - Risk appetite: {risk_appetite}
 
 Search for today's top Indian market news and generate insights for this user.
+Also search for today's FII (Foreign Institutional Investor) and DII (Domestic Institutional Investor) net activity in Indian markets.
+FII net activity is typically between -₹5,000Cr and +₹5,000Cr on a normal trading day.
+DII net is typically between -₹2,000Cr and +₹5,000Cr. If your search finds values outside these ranges, double-check before reporting. Report 0 if data is unavailable.
 Be specific with numbers. Be concise. No fluff.
 
 Return ONLY this JSON:
@@ -385,6 +499,9 @@ Return ONLY this JSON:
   "sipAdvice": "1 sentence. What this means for their SIP this month. Be specific.",
   "sentiment": "BULLISH|BEARISH|NEUTRAL",
   "lastUpdated": "{datetime.now(IST).strftime('%d %b %Y')}",
+  "fiiNet": 0,
+  "diiNet": 0,
+  "fiiDiiSource": "source name or empty string",
   "sectorInsights": {{
     "Auto": "1 sentence about auto sector today",
     "FMCG": "1 sentence about FMCG sector today",
@@ -557,3 +674,233 @@ def get_stock_detail():
 
     data = fetch_stock_detail(symbol, display)
     return jsonify(data), 200
+
+
+# ═══════════════════════════════════════════════════════════
+# ENDPOINT 9: GET /markets/chart
+# Historical price data for charts
+# ═══════════════════════════════════════════════════════════
+
+_chart_cache = {}
+CHART_TTL = {'1d': 60, '1w': 300, '1mo': 600, '3mo': 1800, '6mo': 3600, '1y': 7200, '5y': 14400}
+
+@markets_bp.route('/markets/chart', methods=['GET'])
+def get_chart():
+    symbol = request.args.get('symbol', '')
+    period = request.args.get('period', '1d')
+    if not symbol:
+        return jsonify({'error': 'Symbol required'}), 400
+
+    cache_key = f'{symbol}_{period}'
+    now = time.time()
+    cached = _chart_cache.get(cache_key)
+    ttl = CHART_TTL.get(period, 300)
+    if cached and (now - cached['ts'] < ttl):
+        return jsonify(cached['data']), 200
+
+    interval_map = {'1d': '5m', '1w': '15m', '1mo': '1d', '3mo': '1d', '6mo': '1wk', '1y': '1wk', '5y': '1mo'}
+    interval = interval_map.get(period, '1d')
+
+    try:
+        ticker = yf.Ticker(symbol)
+        hist = ticker.history(period=period, interval=interval)
+        if hist is None or hist.empty:
+            return jsonify({'symbol': symbol, 'period': period, 'candles': [], 'firstClose': 0, 'lastClose': 0}), 200
+
+        candles = []
+        for idx, row in hist.iterrows():
+            candles.append({
+                'timestamp': str(idx),
+                'open': round(float(row.get('Open', 0)), 2),
+                'high': round(float(row.get('High', 0)), 2),
+                'low': round(float(row.get('Low', 0)), 2),
+                'close': round(float(row.get('Close', 0)), 2),
+                'volume': int(row.get('Volume', 0)),
+            })
+
+        first_close = candles[0]['close'] if candles else 0
+        last_close = candles[-1]['close'] if candles else 0
+
+        result = {
+            'symbol': symbol,
+            'period': period,
+            'candles': candles,
+            'firstClose': first_close,
+            'lastClose': last_close,
+        }
+        _chart_cache[cache_key] = {'data': result, 'ts': now}
+        return jsonify(result), 200
+
+    except Exception as e:
+        print(f'[CHART] Error for {symbol}/{period}: {e}')
+        return jsonify({'symbol': symbol, 'period': period, 'candles': [], 'firstClose': 0, 'lastClose': 0}), 200
+
+
+# ═══════════════════════════════════════════════════════════
+# ENDPOINT 10: GET /markets/ipos
+# Upcoming Indian IPOs via Gemini with Google Search grounding
+# ═══════════════════════════════════════════════════════════
+
+_ipo_cache = {'data': None, 'ts': 0}
+IPO_TTL = 14400  # 4 hours
+
+@markets_bp.route('/markets/ipos', methods=['GET'])
+def get_ipos():
+    now = time.time()
+    if _ipo_cache['data'] and (now - _ipo_cache['ts'] < IPO_TTL):
+        return jsonify(_ipo_cache['data']), 200
+
+    prompt = """Search for upcoming IPOs in India (NSE/BSE) opening for subscription in the next 30 days.
+Also include recently listed IPOs from the last 7 days.
+Return ONLY this JSON:
+{
+  "upcoming": [
+    {
+      "companyName": "string",
+      "priceRange": "₹X-₹Y",
+      "openDate": "DD MMM YYYY",
+      "closeDate": "DD MMM YYYY",
+      "lotSize": number,
+      "minInvestment": number,
+      "category": "Mainboard or SME",
+      "gmp": number or null,
+      "gmpPct": number or null
+    }
+  ],
+  "recentListings": [
+    {
+      "companyName": "string",
+      "issuePrice": number,
+      "listingPrice": number,
+      "currentPrice": number,
+      "listingGain": number,
+      "listingDate": "DD MMM YYYY"
+    }
+  ]
+}
+Return ONLY valid JSON. No markdown. No explanation."""
+
+    fallback = {'upcoming': [], 'recentListings': []}
+
+    try:
+        from google import genai
+        from google.genai import types
+
+        client = genai.Client(api_key=os.getenv('GEMINI_API_KEY'))
+        config_kwargs = {'temperature': 0.3}
+        try:
+            search_tool = types.Tool(google_search=types.GoogleSearch())
+            config_kwargs['tools'] = [search_tool]
+        except Exception:
+            pass
+
+        response = client.models.generate_content(
+            model='gemini-2.5-flash',
+            contents=prompt,
+            config=types.GenerateContentConfig(**config_kwargs)
+        )
+
+        data = _parse_json_safe(response.text.strip() if response.text else '')
+        if data and ('upcoming' in data or 'recentListings' in data):
+            if 'upcoming' not in data:
+                data['upcoming'] = []
+            if 'recentListings' not in data:
+                data['recentListings'] = []
+            _ipo_cache['data'] = data
+            _ipo_cache['ts'] = now
+            return jsonify(data), 200
+
+        _ipo_cache['data'] = fallback
+        _ipo_cache['ts'] = now
+        return jsonify(fallback), 200
+
+    except Exception as e:
+        print(f'[IPO] Error: {e}')
+        return jsonify(fallback), 200
+
+
+# ═══════════════════════════════════════════════════════════
+# ENDPOINT 11: GET /markets/weekly-brief
+# Artha Weekly Market Brief (cached 7 days)
+# ═══════════════════════════════════════════════════════════
+
+_weekly_cache = {'data': None, 'ts': 0, 'week': 0}
+
+@markets_bp.route('/markets/weekly-brief', methods=['GET'])
+def get_weekly_brief():
+    now = time.time()
+    # Cache key: ISO week number so it refreshes each week
+    import datetime as dt_module
+    current_week = dt_module.datetime.now().isocalendar()[1]
+
+    if (_weekly_cache['data'] and _weekly_cache['week'] == current_week):
+        return jsonify(_weekly_cache['data']), 200
+
+    fallback = {
+        'content': 'Weekly market brief is being prepared. Check back shortly.',
+        'weekLabel': f'Week {current_week}',
+        'available': False,
+    }
+
+    try:
+        from google import genai
+        from google.genai import types
+        import os
+
+        api_key = os.environ.get('GEMINI_API_KEY', '')
+        if not api_key:
+            return jsonify(fallback), 200
+
+        client = genai.Client(api_key=api_key)
+
+        prompt = """You are Artha, a senior Indian market analyst. Generate a concise weekly market brief (150-200 words) for Indian retail investors.
+
+Cover:
+1. Last week's Nifty/Sensex performance (% change, key levels)
+2. Top 2-3 sectors that moved significantly
+3. FII/DII activity summary for the week
+4. Key events this week: RBI policy, earnings, global events
+5. One actionable SIP insight for long-term investors
+
+Tone: Professional but accessible. No jargon overload.
+Do NOT give buy/sell recommendations.
+End with a one-line market mood summary.
+
+Return ONLY this JSON:
+{
+  "content": "your brief text here",
+  "weekLabel": "Week of DD MMM YYYY",
+  "niftyWeekChange": percentage_number,
+  "topSector": "sector name",
+  "mood": "BULLISH|BEARISH|CAUTIOUS|SIDEWAYS",
+  "available": true
+}"""
+
+        config_kwargs = {'temperature': 0.4}
+        try:
+            search_tool = types.Tool(google_search=types.GoogleSearch())
+            config_kwargs['tools'] = [search_tool]
+        except Exception:
+            pass
+
+        response = client.models.generate_content(
+            model='gemini-2.5-flash',
+            contents=prompt,
+            config=types.GenerateContentConfig(**config_kwargs)
+        )
+
+        data = _parse_json_safe(response.text.strip() if response.text else '')
+        if data and 'content' in data:
+            data['available'] = True
+            _weekly_cache['data'] = data
+            _weekly_cache['week'] = current_week
+            _weekly_cache['ts'] = now
+            return jsonify(data), 200
+
+        _weekly_cache['data'] = fallback
+        _weekly_cache['week'] = current_week
+        return jsonify(fallback), 200
+
+    except Exception as e:
+        print(f'[WEEKLY] Error: {e}')
+        return jsonify(fallback), 200
