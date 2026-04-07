@@ -194,7 +194,7 @@ class NewsSection extends ConsumerWidget {
     return Colors.white.withValues(alpha: 0.24);
   }
 
-  String _firstSource(String sources) => sources.split(',').first.trim(); // FIX 6
+  String _firstSource(String sources) => sources.split(',').first.trim();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -209,30 +209,23 @@ class NewsSection extends ConsumerWidget {
           loading: () => const Center(child: CircularProgressIndicator(strokeWidth: 2, color: _teal)),
           error: (_, __) => Text('News unavailable', style: TextStyle(fontSize: 13, color: Colors.white.withValues(alpha: 0.38))),
           data: (items) => Column(children: items.map((n) => Container(
-            margin: const EdgeInsets.only(bottom: 1),
-            padding: const EdgeInsets.symmetric(vertical: 12),
+            margin: const EdgeInsets.only(bottom: 8),
+            padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              border: Border(bottom: BorderSide(color: Colors.white.withValues(alpha: 0.05)))),
+              color: Colors.white.withValues(alpha: 0.04),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.06))),
             child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              // FIX 6: Sentiment color bar
-              Container(
-                width: 3, height: 40,
-                decoration: BoxDecoration(
-                  color: _sentimentColor(n.sentiment),
-                  borderRadius: BorderRadius.circular(2))),
-              const SizedBox(width: 12),
               Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(n.headline, maxLines: 2, overflow: TextOverflow.ellipsis, // FIX 4C
+                Text(n.headline, maxLines: 2, overflow: TextOverflow.ellipsis,
                   style: TextStyle(fontSize: 14, color: Colors.white.withValues(alpha: 0.85), height: 1.4)),
-                const SizedBox(height: 4),
+                const SizedBox(height: 6),
                 Row(children: [
-                  Flexible(child: Text(_firstSource(n.source), maxLines: 1, overflow: TextOverflow.ellipsis,
+                  Flexible(child: Text(n.source, maxLines: 1, overflow: TextOverflow.ellipsis,
                     style: TextStyle(fontSize: 11, color: Colors.white.withValues(alpha: 0.38)))),
-                  Text(' · ${n.timeAgo}', style: TextStyle(fontSize: 11, color: Colors.white.withValues(alpha: 0.24))),
+                  Text('  ${n.timeAgo}', style: TextStyle(fontSize: 11, color: Colors.white.withValues(alpha: 0.24))),
                 ]),
               ])),
-              const SizedBox(width: 8),
-              Icon(Icons.open_in_new_rounded, color: Colors.white.withValues(alpha: 0.24), size: 14),
             ]),
           )).toList()),
         ),

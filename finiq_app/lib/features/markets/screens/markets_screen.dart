@@ -124,15 +124,24 @@ class _MarketsScreenState extends ConsumerState<MarketsScreen> with TickerProvid
             ),
           )),
 
-          // ── WEEKLY BRIEF (Mon/Tue only) ──
+          // ── WEEKLY BRIEF ──
           SliverToBoxAdapter(child: const SizedBox(height: 20)),
           SliverToBoxAdapter(child: const WeeklyBriefCard()),
 
-          // ── ARTHA CARD ──
-          SliverToBoxAdapter(child: ArthaCard()),
-
+          // ── GLOBAL INDICES ──
+          SliverToBoxAdapter(child: overviewAsync.when(
+            loading: () => const SizedBox.shrink(),
+            error: (_, __) => const SizedBox.shrink(),
+            data: (d) => GlobalIndicesStrip(globalIndices: d.global),
+          )),
+          
           // ── FII/DII ──
+          SliverToBoxAdapter(child: const SizedBox(height: 20)),
           SliverToBoxAdapter(child: FiiDiiCard()),
+
+          // ── ARTHA CARD ──
+          SliverToBoxAdapter(child: const SizedBox(height: 20)),
+          SliverToBoxAdapter(child: ArthaCard()),
 
           // ── COMMODITIES ──
           SliverToBoxAdapter(child: overviewAsync.when(
@@ -169,16 +178,13 @@ class _MarketsScreenState extends ConsumerState<MarketsScreen> with TickerProvid
             onStockTap: _openStockSheet,
           )),
 
-          // ── VOLUME SHOCKERS ──
-          SliverToBoxAdapter(child: VolumeShockersSection(onStockTap: _openStockSheet)),
-
           // ── NEWS ──
           SliverToBoxAdapter(child: const SizedBox(height: 20)),
           SliverToBoxAdapter(child: NewsSection()),
 
           // ── IPO TRACKER ──
           SliverToBoxAdapter(child: const SizedBox(height: 20)),
-          SliverToBoxAdapter(child: IPOSection()),
+          SliverToBoxAdapter(child: const IPOSection()),
 
           // ── WATCHLIST ──
           SliverToBoxAdapter(child: const SizedBox(height: 20)),
