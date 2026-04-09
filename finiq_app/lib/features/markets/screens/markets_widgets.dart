@@ -14,7 +14,7 @@ String _fmtCommodity(double p) => '₹${NumberFormat('#,##,###', 'en_IN').format
 
 
 // ═══════════════════════════════════════════════════════════
-// WEEKLY BRIEF — first-open-of-the-week Artha card
+// WEEKLY BRIEF — compact Monday-only card with read more
 // ═══════════════════════════════════════════════════════════
 
 class WeeklyBriefCard extends ConsumerStatefulWidget {
@@ -24,61 +24,120 @@ class WeeklyBriefCard extends ConsumerStatefulWidget {
 }
 
 class _WeeklyBriefCardState extends ConsumerState<WeeklyBriefCard> {
-  bool _dismissed = false;
-  bool _expanded = false;
+  bool _weeklyExpanded = false;
 
   @override
   Widget build(BuildContext context) {
-    if (_dismissed) return const SizedBox.shrink();
+    // Usually only shown on Mondays, but rendering always so user can verify
+    // final isMonday = DateTime.now().weekday == DateTime.monday;
+    // if (!isMonday) return const SizedBox.shrink();
 
-    // Show on first open of the week (Mon/Tue to catch late openers)
     final brief = ref.watch(weeklyBriefProvider);
     return brief.when(
-      loading: () => const SizedBox.shrink(),
+      loading: () => Padding(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: _amber.withValues(alpha: 0.08),
+            border: Border.all(color: _amber.withValues(alpha: 0.25)),
+            borderRadius: BorderRadius.circular(16)),
+          child: Row(children: [
+            SizedBox(width: 14, height: 14, child: CircularProgressIndicator(
+              strokeWidth: 1.5, color: _amber)),
+            const SizedBox(width: 10),
+            Text('Loading weekly brief...', style: TextStyle(fontSize: 12, color: Colors.white.withValues(alpha: 0.38))),
+          ]),
+        ),
+      ),
       error: (_, __) => const SizedBox.shrink(),
       data: (b) {
-        // Fallback for empty API
-        final content = b.content.isNotEmpty ? b.content : "Indian markets experienced a volatile last week, with the Nifty 50 closing with a modest 0.47% loss for the week ending April 4, 2026. Geopolitical tensions stemming from the US-Iran conflict, which initially saw crude oil prices surge over 10%, were key market movers. Foreign Institutional Investors (FIIs) continued their selling streak, offloading approximately ₹1837 crore in the first two trading sessions of April, while Domestic Institutional Investors (DIIs) provided crucial market support.\n\nThis week, the Reserve Bank of India's (RBI) Monetary Policy Committee (MPC) meeting (April 6-8) is underway, with expectations for the repo rate to remain steady at 5.25%. The Q4 FY26 earnings season kicks off, with TCS reporting on April 9. Global markets will closely monitor developments in the US-Iran conflict and the IMF's Global Financial Stability Report, released on April 7.";
-        
+        final headline = b.headline.isNotEmpty ? b.headline : 'Markets closed for the week.';
+        final niftyChange = b.niftyChange;
+        final isPositive = niftyChange.startsWith('+');
+
         return Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
           child: Container(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft, end: Alignment.bottomRight,
-                colors: [_amber.withValues(alpha: 0.12), _amber.withValues(alpha: 0.03)]),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: _amber.withValues(alpha: 0.40))),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-              // Header
-              Row(children: [
-                Container(width: 32, height: 32,
-                  decoration: const BoxDecoration(color: _amber, shape: BoxShape.circle),
-                  child: const Center(child: Text('W', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: Colors.black)))),
-                const SizedBox(width: 12),
-                const Expanded(child: Text("Artha Weekly Brief", style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: _amber))),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(color: _amber.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(6)),
-                  child: Text('-0.47%', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: _amber)),
-                ),
-              ]),
-              const SizedBox(height: 16),
-              Text(content, style: TextStyle(fontSize: 14, color: Colors.white.withValues(alpha: 0.70), height: 1.6)),
-              const SizedBox(height: 16),
-              Text('Week of 07 Apr 2026', style: TextStyle(fontSize: 12, color: Colors.white.withValues(alpha: 0.38))),
-            ]),
+              color: _amber.withValues(alpha: 0.08),
+              border: Border.all(color: _amber.withValues(alpha: 0.25)),
+              borderRadius: BorderRadius.circular(16)),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header row with W badge + title + Nifty pill
+                Row(children: [
+                  Container(width: 28, height: 28,
+                    decoration: BoxDecoration(
+                      color: _amber.withValues(alpha: 0.20), shape: BoxShape.circle),
+                    child: const Center(child: Text('W', style: TextStyle(
+                      fontSize: 13, fontWeight: FontWeight.w700, color: _amber)))),
+                  const SizedBox(width: 8),
+                  Expanded(child: Text(
+                    "Artha's Weekly Brief · ${b.weekLabel}",
+                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: _amber))),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: (isPositive ? _teal : _red).withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(20)),
+                    child: Text(niftyChange, style: TextStyle(
+                      fontSize: 11, fontWeight: FontWeight.w600,
+                      color: isPositive ? _teal : _red))),
+                ]),
+                const SizedBox(height: 8),
+                // Headline — 1 line collapsed, full expanded
+                Text(headline,
+                  style: const TextStyle(fontSize: 13, color: Colors.white, height: 1.4),
+                  maxLines: _weeklyExpanded ? null : 1,
+                  overflow: _weeklyExpanded ? TextOverflow.visible : TextOverflow.ellipsis),
+                if (!_weeklyExpanded && headline.length > 60)
+                  GestureDetector(
+                    onTap: () => setState(() => _weeklyExpanded = true),
+                    child: const Padding(
+                      padding: EdgeInsets.only(top: 4),
+                      child: Text('Read more →', style: TextStyle(fontSize: 11, color: _amber)))),
+                if (_weeklyExpanded) ...[
+                  const SizedBox(height: 8),
+                  Wrap(spacing: 8, runSpacing: 6, children: [
+                    _weekChip(Icons.event_outlined, b.keyEvent),
+                    _weekChip(Icons.calendar_today_outlined, b.weekAhead),
+                  ]),
+                  const SizedBox(height: 6),
+                  GestureDetector(
+                    onTap: () => setState(() => _weeklyExpanded = false),
+                    child: Text('Show less ↑', style: TextStyle(fontSize: 11, color: Colors.white.withValues(alpha: 0.38)))),
+                ],
+              ],
+            ),
           ),
         );
       },
     );
   }
+
+  Widget _weekChip(IconData icon, String text) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+    decoration: BoxDecoration(
+      color: Colors.white.withValues(alpha: 0.04),
+      borderRadius: BorderRadius.circular(8)),
+    child: Row(mainAxisSize: MainAxisSize.min, children: [
+      Icon(icon, size: 11, color: Colors.white38),
+      const SizedBox(width: 5),
+      Flexible(child: Text(text,
+        style: TextStyle(fontSize: 11, color: Colors.white.withValues(alpha: 0.60)),
+        maxLines: 1, overflow: TextOverflow.ellipsis)),
+    ]),
+  );
 }
 
 
 // ═══════════════════════════════════════════════════════════
 // ARTHA CARD — 2-line truncation + Read more (FIX 4A)
+// AnimatedSize expand/collapse with overflow detection
 // ═══════════════════════════════════════════════════════════
 
 class ArthaCard extends ConsumerStatefulWidget {
@@ -88,18 +147,18 @@ class ArthaCard extends ConsumerStatefulWidget {
 }
 
 class _ArthaCardState extends ConsumerState<ArthaCard> {
-  bool _summaryExpanded = false;
+  bool _arthaExpanded = false;
 
   @override
   Widget build(BuildContext context) {
     final artha = ref.watch(arthaMarketProvider);
     return artha.when(
       loading: () => Padding(padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
-        child: Container(height: 100, decoration: BoxDecoration(
+        child: Container(constraints: const BoxConstraints(minHeight: 60), decoration: BoxDecoration(
           color: Colors.white.withValues(alpha: 0.04), borderRadius: BorderRadius.circular(16)))),
       error: (_, __) => const SizedBox.shrink(),
       data: (a) {
-        final content = a.marketSummary.isNotEmpty ? a.marketSummary : "Indian equity benchmarks, Sensex and Nifty 50, extended gains for the fourth consecutive session today, with Nifty 50 closing up 0.68% at 23,123.65 and Sensex up 0.69% at 74,616.58. The market rebounded from early losses, driven by buying in oversold segments and reports of diplomatic efforts to de-escalate the US-Iran conflict, despite persistent FII selling and elevated crude oil prices.";
+        final content = a.marketSummary.isNotEmpty ? a.marketSummary : "Market analysis is loading. Check back shortly.";
         return Padding(
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
           child: Container(
@@ -109,75 +168,149 @@ class _ArthaCardState extends ConsumerState<ArthaCard> {
               borderRadius: BorderRadius.circular(16),
               border: Border.all(color: _teal.withValues(alpha: 0.20))),
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              // Header
+              // Header — clean, no chips when collapsed
               Row(children: [
                 Container(width: 30, height: 30,
                   decoration: const BoxDecoration(color: _teal, shape: BoxShape.circle),
                   child: const Center(child: Text('A', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Colors.white)))),
                 const SizedBox(width: 10),
                 const Expanded(child: Text("Artha's Take", style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: _teal))),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(color: _teal.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(6)),
-                  child: const Text('FIRE Impact', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: _teal))),
               ]),
-              const SizedBox(height: 16),
-              Text(content, style: TextStyle(fontSize: 14, color: Colors.white.withValues(alpha: 0.85), height: 1.6)),
+              const SizedBox(height: 12),
+              // AnimatedSize expand/collapse with overflow detection
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final textSpan = TextSpan(
+                    text: content,
+                    style: TextStyle(fontSize: 14, color: Colors.white.withValues(alpha: 0.85), height: 1.6),
+                  );
+                  final textPainter = TextPainter(
+                    text: textSpan, maxLines: 2,
+                    textDirection: Directionality.of(context),
+                  )..layout(maxWidth: constraints.maxWidth);
+                  final didOverflow = textPainter.didExceedMaxLines;
+
+                  return AnimatedSize(
+                    duration: const Duration(milliseconds: 300),
+                    curve: Curves.easeOutCubic,
+                    alignment: Alignment.topCenter,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(content,
+                          maxLines: _arthaExpanded ? null : 2,
+                          overflow: _arthaExpanded ? TextOverflow.visible : TextOverflow.ellipsis,
+                          style: TextStyle(fontSize: 14, color: Colors.white.withValues(alpha: 0.85), height: 1.6)),
+                        if (!_arthaExpanded && didOverflow)
+                          GestureDetector(
+                            onTap: () => setState(() => _arthaExpanded = true),
+                            child: const Padding(
+                              padding: EdgeInsets.only(top: 4),
+                              child: Text('Read more →', style: TextStyle(fontSize: 12, color: _teal, fontWeight: FontWeight.w500)))),
+                        // Chips only appear when expanded
+                        if (_arthaExpanded) ...[
+                          const SizedBox(height: 12),
+                          Wrap(spacing: 8, runSpacing: 6, children: [
+                            _arthaChip('FIRE Impact'),
+                            _arthaChip('SIP This Month'),
+                          ]),
+                          const SizedBox(height: 8),
+                          GestureDetector(
+                            onTap: () => setState(() => _arthaExpanded = false),
+                            child: Text('Show less ↑',
+                              style: TextStyle(fontSize: 12, color: Colors.white.withValues(alpha: 0.38)))),
+                        ],
+                      ],
+                    ),
+                  );
+                },
+              ),
             ]),
           ),
         );
       },
     );
   }
+
+  Widget _arthaChip(String label) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+    decoration: BoxDecoration(
+      color: _teal.withValues(alpha: 0.12),
+      borderRadius: BorderRadius.circular(6)),
+    child: Text(label, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: _teal)),
+  );
 }
 // ═══════════════════════════════════════════════════════════
-// GLOBAL INDICES
+// GLOBAL INDICES — standalone horizontal scroll strip
 // ═══════════════════════════════════════════════════════════
 
 class GlobalIndicesStrip extends StatelessWidget {
   final Map<String, StockQuote> globalIndices;
   const GlobalIndicesStrip({super.key, required this.globalIndices});
 
+  static const _globalNames = {
+    'S&P 500':    'S&P 500',
+    'Nasdaq':     'Nasdaq',
+    'Nikkei':     'Nikkei',
+    'Hang Seng':  'Hang Seng',
+    'FTSE':       'FTSE 100',
+    'SGX Nifty':  'SGX Nifty',
+  };
+
   @override
   Widget build(BuildContext context) {
     if (globalIndices.isEmpty) return const SizedBox.shrink();
-    
-    return Padding(
-      padding: const EdgeInsets.only(top: 10, bottom: 20),
-      child: Row(
+
+    return Container(
+      margin: const EdgeInsets.only(top: 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 16),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Row(children: [
-              Icon(Icons.schedule, size: 12, color: Colors.white38),
-              SizedBox(width: 4),
-              Text('Opens tomorrow 9:15 AM IST', style: TextStyle(fontSize: 11, color: Colors.white38)),
-              SizedBox(width: 16),
-              Text('~15 min delay', style: TextStyle(fontSize: 11, color: Colors.white38)),
-            ]),
-          ),
-          Expanded(
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: globalIndices.entries.map((e) {
-                  return Padding(
-                    padding: const EdgeInsets.only(right: 16),
-                    child: Row(
-                      children: [
-                        Text(e.value.displayName, style: TextStyle(fontSize: 12, color: Colors.white.withValues(alpha: 0.70), fontWeight: FontWeight.w500)),
-                        const SizedBox(width: 4),
-                        Text('${e.value.changePct >= 0 ? "+" : ""}${e.value.changePct.toStringAsFixed(1)}%', 
-                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: e.value.changePct >= 0 ? _teal : _red)),
-                      ],
-                    ),
-                  );
-                }).toList(),
-              ),
+              Text('GLOBAL MARKETS', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600,
+                color: Colors.white.withValues(alpha: 0.38), letterSpacing: 1.5)),
+            ])),
+          const SizedBox(height: 8),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              children: globalIndices.entries.map((entry) {
+                final name = entry.key;
+                final data = entry.value;
+                final isPos = data.changePct >= 0;
+                final displayName = _globalNames[name] ?? data.displayName;
+                return Container(
+                  margin: const EdgeInsets.only(right: 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.04),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: Colors.white.withValues(alpha: 0.06))),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(displayName, style: TextStyle(fontSize: 10, color: Colors.white.withValues(alpha: 0.38))),
+                      const SizedBox(height: 4),
+                      Row(children: [
+                        Icon(isPos ? Icons.arrow_drop_up_rounded : Icons.arrow_drop_down_rounded,
+                          color: isPos ? _teal : _red, size: 16),
+                        Text('${isPos ? "+" : ""}${data.changePct.toStringAsFixed(2)}%',
+                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600,
+                            color: isPos ? _teal : _red)),
+                      ]),
+                    ],
+                  ),
+                );
+              }).toList(),
             ),
-          )
+          ),
         ],
-      )
+      ),
     );
   }
 }
@@ -353,30 +486,39 @@ class SentimentBar extends StatelessWidget {
           color: Colors.white.withValues(alpha: 0.03),
           border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
           borderRadius: BorderRadius.circular(10)),
-        child: Row(children: [
-          Icon(Icons.trending_up, size: 14, color: c),
-          const SizedBox(width: 6),
-          Text('Market sentiment: ', style: TextStyle(fontSize: 12, color: Colors.white.withValues(alpha: 0.38))),
-          Text(_label(s), style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: c)),
-          const Spacer(),
-          // 5 segment bar
-          Row(children: List.generate(5, (i) => Container(
-            width: 20, height: 5,
-            margin: EdgeInsets.only(left: i == 0 ? 0 : 2),
-            decoration: BoxDecoration(
-              color: i < filled ? c : Colors.white.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(3)),
-          ))),
-          if (overview.isMarketOpen) ...[
-            const SizedBox(width: 6),
-            Container(width: 5, height: 5,
-              decoration: const BoxDecoration(color: _teal, shape: BoxShape.circle)),
+        child: Wrap(
+          alignment: WrapAlignment.spaceBetween,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          runSpacing: 8,
+          children: [
+            Row(mainAxisSize: MainAxisSize.min, children: [
+              Icon(Icons.trending_up, size: 14, color: c),
+              const SizedBox(width: 6),
+              Text('Market sentiment: ', style: TextStyle(fontSize: 12, color: Colors.white.withValues(alpha: 0.38))),
+              Text(_label(s), style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: c)),
+            ]),
+            Row(mainAxisSize: MainAxisSize.min, children: [
+              // 5 segment bar
+              Row(mainAxisSize: MainAxisSize.min, children: List.generate(5, (i) => Container(
+                width: 20, height: 5,
+                margin: EdgeInsets.only(left: i == 0 ? 0 : 2),
+                decoration: BoxDecoration(
+                  color: i < filled ? c : Colors.white.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(3)),
+              ))),
+              if (overview.isMarketOpen) ...[
+                const SizedBox(width: 6),
+                Container(width: 5, height: 5,
+                  decoration: const BoxDecoration(color: _teal, shape: BoxShape.circle)),
+              ],
+              if (updated.isNotEmpty) ...[
+                const SizedBox(width: 6),
+                Text('Updated $updated IST', style: TextStyle(fontSize: 9, color: Colors.white.withValues(alpha: 0.24))),
+              ],
+            ]),
           ],
-          if (updated.isNotEmpty) ...[
-            const SizedBox(width: 6),
-            Text('Updated $updated IST', style: TextStyle(fontSize: 9, color: Colors.white.withValues(alpha: 0.24))),
-          ],
-        ])),
+        ),
+      ),
     );
   }
 }

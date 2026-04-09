@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../models/market_models.dart';
@@ -182,7 +183,7 @@ class VolumeShockersSection extends ConsumerWidget {
 
 
 // ═══════════════════════════════════════════════════════════
-// NEWS — FIX 6: sentiment bars + first source only
+// NEWS — FIX 6: sentiment color bars + clean source
 // ═══════════════════════════════════════════════════════════
 
 class NewsSection extends ConsumerWidget {
@@ -194,7 +195,21 @@ class NewsSection extends ConsumerWidget {
     return Colors.white.withValues(alpha: 0.24);
   }
 
-  String _firstSource(String sources) => sources.split(',').first.trim();
+  String _cleanSource(String raw) {
+    for (final sep in [' | ', ', ', ' · ', ' - ']) {
+      if (raw.contains(sep)) return raw.split(sep).first.trim();
+    }
+    return raw.length > 25 ? '${raw.substring(0, 25).trim()}...' : raw;
+  }
+
+  void _launchUrl(String url) async {
+    if (url.isEmpty) return;
+    final uri = Uri.tryParse(url);
+    if (uri == null) return;
+    try {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } catch (_) {}
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -208,26 +223,55 @@ class NewsSection extends ConsumerWidget {
         news.when(
           loading: () => const Center(child: CircularProgressIndicator(strokeWidth: 2, color: _teal)),
           error: (_, __) => Text('News unavailable', style: TextStyle(fontSize: 13, color: Colors.white.withValues(alpha: 0.38))),
-          data: (items) => Column(children: items.map((n) => Container(
-            margin: const EdgeInsets.only(bottom: 8),
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.04),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.06))),
-            child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(n.headline, maxLines: 2, overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: 14, color: Colors.white.withValues(alpha: 0.85), height: 1.4)),
-                const SizedBox(height: 6),
-                Row(children: [
-                  Flexible(child: Text(n.source, maxLines: 1, overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 11, color: Colors.white.withValues(alpha: 0.38)))),
-                  Text('  ${n.timeAgo}', style: TextStyle(fontSize: 11, color: Colors.white.withValues(alpha: 0.24))),
-                ]),
-              ])),
-            ]),
-          )).toList()),
+          data: (items) => items.isEmpty
+            ? Padding(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                child: Text('News analysis will appear when available.',
+                  style: TextStyle(fontSize: 13, color: Colors.white.withValues(alpha: 0.38))))
+            : Column(children: items.map((n) {
+            final sentColor = _sentimentColor(n.sentiment);
+            final hasUrl = n.url.isNotEmpty;
+            return GestureDetector(
+              onTap: hasUrl ? () => _launchUrl(n.url) : null,
+              child: Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.04),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.white.withValues(alpha: 0.06))),
+                child: IntrinsicHeight(
+                  child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                    // Sentiment color bar (left edge)
+                    Container(
+                      width: 3,
+                      decoration: BoxDecoration(
+                        color: sentColor,
+                        borderRadius: const BorderRadius.only(
+                          topLeft: Radius.circular(12),
+                          bottomLeft: Radius.circular(12)))),
+                    // Content
+                    Expanded(child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Text(n.headline, maxLines: 2, overflow: TextOverflow.ellipsis,
+                          style: TextStyle(fontSize: 14, color: Colors.white.withValues(alpha: 0.85), height: 1.4)),
+                        const SizedBox(height: 6),
+                        Row(children: [
+                          Flexible(child: Text(_cleanSource(n.source), maxLines: 1, overflow: TextOverflow.ellipsis,
+                            style: TextStyle(fontSize: 11, color: Colors.white.withValues(alpha: 0.38)))),
+                          Text('  ${n.timeAgo}', style: TextStyle(fontSize: 11, color: Colors.white.withValues(alpha: 0.24))),
+                          if (hasUrl) ...[
+                            const SizedBox(width: 8),
+                            Text('Read →', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: _teal)),
+                          ],
+                        ]),
+                      ]),
+                    )),
+                  ]),
+                ),
+              ),
+            );
+          }).toList()),
         ),
       ]),
     );
@@ -492,9 +536,12 @@ class StockRow extends StatelessWidget {
   final VoidCallback onTap;
   const StockRow({super.key, required this.quote, required this.onTap});
 
+  String _cleanSymbol(String s) => s.replaceAll('.NS', '').replaceAll('.BO', '').replaceAll('^', '');
+
   @override
   Widget build(BuildContext context) {
     final c = quote.isPositive ? _teal : _red;
+    final sign = quote.isPositive ? '+' : '';
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -502,20 +549,72 @@ class StockRow extends StatelessWidget {
         decoration: BoxDecoration(
           border: Border(bottom: BorderSide(color: Colors.white.withValues(alpha: 0.05)))),
         child: Row(children: [
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-            Text(quote.displayName, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Colors.white)),
-            Text(quote.cleanSymbol, style: TextStyle(fontSize: 11, color: Colors.white.withValues(alpha: 0.38))),
+          // Stock name + symbol
+          Expanded(flex: 3, child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+            Text(quote.displayName, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.white),
+              maxLines: 1, overflow: TextOverflow.ellipsis),
+            Text(_cleanSymbol(quote.symbol), style: TextStyle(fontSize: 11, color: Colors.white.withValues(alpha: 0.38))),
           ])),
+          // Sparkline (60×30)
+          if (quote.sparkline.length >= 2)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: SizedBox(
+                width: 60, height: 30,
+                child: CustomPaint(painter: _StockSparkPainter(data: quote.sparkline, color: c)),
+              ),
+            ),
+          // Price + change
           Column(crossAxisAlignment: CrossAxisAlignment.end, mainAxisSize: MainAxisSize.min, children: [
             Text(_fmtPrice(quote.current),
-              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Colors.white)),
-            Text('${quote.isPositive ? "+" : ""}${quote.changePct.toStringAsFixed(2)}%',
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: c)),
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.white)),
+            const SizedBox(height: 2),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: c.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(6)),
+              child: Text('$sign${quote.changePct.toStringAsFixed(2)}%',
+                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: c))),
+            Text('$sign₹${quote.change.abs().toStringAsFixed(1)}',
+              style: TextStyle(fontSize: 10, color: Colors.white.withValues(alpha: 0.38))),
           ]),
         ]),
       ),
     );
   }
+}
+
+// Mini sparkline painter for stock rows
+class _StockSparkPainter extends CustomPainter {
+  final List<double> data;
+  final Color color;
+  _StockSparkPainter({required this.data, required this.color});
+
+  @override
+  void paint(Canvas canvas, Size s) {
+    if (data.length < 2) return;
+    double mn = data[0], mx = data[0];
+    for (final v in data) { if (v < mn) mn = v; if (v > mx) mx = v; }
+    final r = mx - mn;
+    if (r == 0) return;
+    final path = Path();
+    for (int i = 0; i < data.length; i++) {
+      final x = (i / (data.length - 1)) * s.width;
+      final y = s.height - ((data[i] - mn) / r) * s.height;
+      if (i == 0) { path.moveTo(x, y); } else { path.lineTo(x, y); }
+    }
+    canvas.drawPath(path, Paint()..color = color..strokeWidth = 1.5..style = PaintingStyle.stroke..strokeCap = StrokeCap.round);
+    // Fill gradient
+    final fillPath = Path.from(path)
+      ..lineTo(s.width, s.height)
+      ..lineTo(0, s.height)
+      ..close();
+    canvas.drawPath(fillPath, Paint()..color = color.withValues(alpha: 0.08)..style = PaintingStyle.fill);
+  }
+
+  @override
+  bool shouldRepaint(covariant _StockSparkPainter old) => old.data != data;
 }
 
 

@@ -5,14 +5,12 @@ class ApiConstants {
 
   // ── ENVIRONMENT TOGGLE ──────────────────────────────────
   // Set to true before Railway deploy, false for local dev
-  static const bool isProduction = false;
+  static const bool isProduction = true;
 
   // ── ENVIRONMENTS ────────────────────────────────────────
   static const String _prodBaseUrl =
       'https://finiq-backend-production.up.railway.app';
 
-  // Physical device on same Wi-Fi — use laptop's LAN IP
-  // Find via: ipconfig (Windows) / ifconfig (Mac/Linux)
   static const String _devBaseUrl = 'http://10.240.191.92:5000';
 
   static String get baseUrl => isProduction ? _prodBaseUrl : _devBaseUrl;

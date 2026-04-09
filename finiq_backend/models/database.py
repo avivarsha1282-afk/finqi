@@ -22,6 +22,7 @@ if db_available:
     fire_plans_collection = db['fire_plans']
     tax_reports_collection = db['tax_reports']
     chat_sessions_collection = db['chat_sessions']
+    artha_conversations_collection = db['artha_conversations']
 else:
     db = None
     users_collection = None
@@ -29,6 +30,7 @@ else:
     fire_plans_collection = None
     tax_reports_collection = None
     chat_sessions_collection = None
+    artha_conversations_collection = None
 
 
 def create_indexes():
@@ -42,3 +44,4 @@ def create_indexes():
     fire_plans_collection.create_index([('firebase_uid', ASCENDING)], unique=True, background=True)
     tax_reports_collection.create_index([('firebase_uid', ASCENDING)], unique=True, background=True)
     chat_sessions_collection.create_index([('firebase_uid', ASCENDING)], unique=True, background=True)
+    artha_conversations_collection.create_index([('userId', ASCENDING), ('createdAt', ASCENDING)], background=True)

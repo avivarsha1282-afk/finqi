@@ -275,15 +275,17 @@ class MarketNews {
   final String source;
   final String timeAgo;
   final String sentiment;
+  final String url;
 
   MarketNews({required this.headline, required this.source,
-    required this.timeAgo, required this.sentiment});
+    required this.timeAgo, required this.sentiment, this.url = ''});
 
   factory MarketNews.fromJson(Map<String, dynamic> j) => MarketNews(
     headline: j['headline'] as String? ?? '',
     source: j['source'] as String? ?? '',
     timeAgo: j['timeAgo'] as String? ?? '',
     sentiment: j['sentiment'] as String? ?? 'NEUTRAL',
+    url: j['url'] as String? ?? '',
   );
 }
 
@@ -407,26 +409,38 @@ class SearchResult {
 
 class WeeklyBrief {
   final String content;
+  final String headline;
+  final String niftyChange;
   final String weekLabel;
+  final String topSector;
+  final String keyEvent;
+  final String weekAhead;
   final double? niftyWeekChange;
-  final String? topSector;
   final String mood;
   final bool available;
 
   WeeklyBrief({
     required this.content,
+    required this.headline,
+    required this.niftyChange,
     required this.weekLabel,
+    required this.topSector,
+    required this.keyEvent,
+    required this.weekAhead,
     this.niftyWeekChange,
-    this.topSector,
     this.mood = 'SIDEWAYS',
     this.available = false,
   });
 
   factory WeeklyBrief.fromJson(Map<String, dynamic> j) => WeeklyBrief(
     content: j['content'] as String? ?? '',
+    headline: j['headline'] as String? ?? j['content'] as String? ?? '',
+    niftyChange: j['niftyChange'] as String? ?? '',
     weekLabel: j['weekLabel'] as String? ?? '',
+    topSector: j['topSector'] as String? ?? '',
+    keyEvent: j['keyEvent'] as String? ?? '',
+    weekAhead: j['weekAhead'] as String? ?? '',
     niftyWeekChange: (j['niftyWeekChange'] as num?)?.toDouble(),
-    topSector: j['topSector'] as String?,
     mood: j['mood'] as String? ?? 'SIDEWAYS',
     available: j['available'] as bool? ?? false,
   );

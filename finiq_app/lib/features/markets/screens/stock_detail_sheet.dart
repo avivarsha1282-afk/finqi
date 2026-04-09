@@ -328,8 +328,16 @@ class _StockDetailSheetState extends ConsumerState<StockDetailSheet> {
   // PERIOD PERFORMANCE ROW
   // ═══════════════════════════════════════════
   Widget _buildPeriodPerfRow(ChartData data) {
-    final change = data.change;
-    final pct = data.changePct;
+    // For 1D period, use prevClose as reference (not first candle open)
+    final q = _detail ?? widget.quote;
+    final double refPrice;
+    if (_selectedPeriod == '1D' && q.prevClose > 0) {
+      refPrice = q.prevClose;
+    } else {
+      refPrice = data.firstClose;
+    }
+    final change = q.current - refPrice;
+    final pct = refPrice > 0 ? (change / refPrice * 100) : data.changePct;
     final isPos = change >= 0;
     final color = isPos ? _teal : _red;
     final s = isPos ? '+' : '';

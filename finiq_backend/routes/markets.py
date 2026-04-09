@@ -175,7 +175,7 @@ def fetch_quote(symbol: str, display_name: str = '') -> dict:
         # BUG 2 fix: BSE fallback if NSE returns 0
         if result['current'] == 0 and symbol.endswith('.NS'):
             bse_sym = symbol.replace('.NS', '.BO')
-            print(f'[MARKETS] {symbol} returned ₹0, trying BSE fallback: {bse_sym}')
+            print(f'[MARKETS] {symbol} returned 0, trying BSE fallback: {bse_sym}')
             try:
                 result = _try_fetch(bse_sym)
                 result['symbol'] = symbol  # keep original symbol for consistency
@@ -326,9 +326,11 @@ def get_market_overview():
                     price_inr = (usd_price / TROY_OZ_GRAMS) * 10 * usd_inr * INDIA_PREMIUM
                     prev_inr  = (prev_close / TROY_OZ_GRAMS) * 10 * usd_inr * INDIA_PREMIUM
                     unit = 'per 10g · 24K'
-                    print(f'[GOLD] USD: {usd_price}, INR rate: {usd_inr}, per 10g INR: {price_inr:.0f}')
-                    if not (140000 <= price_inr <= 160000):
-                        print(f'WARNING: Gold price {price_inr:.0f} outside expected range!')
+                    print(f'[GOLD] USD per oz: {usd_price}')
+                    print(f'[GOLD] INR rate: {usd_inr}')
+                    print(f'[GOLD] Per 10g INR: {price_inr:.0f}')
+                    print(f'[GOLD] Expected range: INR 1,45,000 - INR 1,55,000')
+                    print(f'[GOLD] In range: {145000 <= price_inr <= 155000}')
                 elif csymbol == 'SI=F':  # Silver: USD/troy oz → ₹/kg
                     price_inr = (usd_price / TROY_OZ_GRAMS) * 1000 * usd_inr * INDIA_PREMIUM
                     prev_inr  = (prev_close / TROY_OZ_GRAMS) * 1000 * usd_inr * INDIA_PREMIUM
@@ -371,8 +373,10 @@ def get_market_overview():
         'commodities': commodities_data,
     }
 
-    _overview_cache['data'] = result
-    _overview_cache['ts'] = now
+    if commodities_data and global_data:
+        _overview_cache['data'] = result
+        _overview_cache['ts'] = now
+
     return jsonify(result), 200
 
 
@@ -534,11 +538,20 @@ Return ONLY valid JSON. No markdown. No explanation."""
         except Exception:
             pass
 
-        response = client.models.generate_content(
-            model='gemini-2.5-flash',
-            contents=prompt,
-            config=types.GenerateContentConfig(**config_kwargs)
-        )
+        response = None
+        for _model in ['gemini-2.0-flash-lite', 'gemini-2.0-flash', 'gemini-2.5-flash']:
+            try:
+                response = client.models.generate_content(
+                    model=_model,
+                    contents=prompt,
+                    config=types.GenerateContentConfig(**config_kwargs)
+                )
+                break
+            except Exception as e:
+                print(f'[ARTHA] {_model} failed: {str(e)[:120]}')
+                continue
+        if response is None:
+            raise Exception('All models exhausted')
 
         data = _parse_json_safe(response.text.strip() if response.text else '')
         if data and 'marketSummary' in data:
@@ -571,6 +584,8 @@ def get_market_news():
 
     prompt = """Search for the 5 most important Indian stock market news stories from today.
 Focus on: Nifty, Sensex, RBI, FII/DII activity, major corporate results, sector moves.
+Include a real URL to the actual article for each news item.
+Use the exact URL from the search result, not a homepage URL.
 
 Return ONLY a JSON array of 5 items:
 [
@@ -578,13 +593,14 @@ Return ONLY a JSON array of 5 items:
     "headline": "max 80 chars",
     "source": "e.g. Economic Times, Mint, Moneycontrol",
     "timeAgo": "e.g. 2 hours ago",
-    "sentiment": "POSITIVE|NEGATIVE|NEUTRAL"
+    "sentiment": "POSITIVE|NEGATIVE|NEUTRAL",
+    "url": "https://full-article-url-here"
   }
 ]
 Return ONLY the JSON array. No markdown. No explanation."""
 
     fallback_news = [
-        {"headline": "Markets trade mixed amid global cues and FII activity", "source": "Market Update", "timeAgo": "Today", "sentiment": "NEUTRAL"},
+        {"headline": "Markets trade mixed amid global cues and FII activity", "source": "Market Update", "timeAgo": "Today", "sentiment": "NEUTRAL", "url": ""},
     ]
 
     try:
@@ -599,11 +615,20 @@ Return ONLY the JSON array. No markdown. No explanation."""
         except Exception:
             pass
 
-        response = client.models.generate_content(
-            model='gemini-2.5-flash',
-            contents=prompt,
-            config=types.GenerateContentConfig(**config_kwargs)
-        )
+        response = None
+        for _model in ['gemini-2.0-flash-lite', 'gemini-2.0-flash', 'gemini-2.5-flash']:
+            try:
+                response = client.models.generate_content(
+                    model=_model,
+                    contents=prompt,
+                    config=types.GenerateContentConfig(**config_kwargs)
+                )
+                break
+            except Exception as e:
+                print(f'[NEWS] {_model} failed: {str(e)[:120]}')
+                continue
+        if response is None:
+            raise Exception('All models exhausted')
 
         text = response.text.strip() if response.text else ''
         # Parse JSON array
@@ -794,11 +819,20 @@ Return ONLY valid JSON. No markdown. No explanation."""
         except Exception:
             pass
 
-        response = client.models.generate_content(
-            model='gemini-2.5-flash',
-            contents=prompt,
-            config=types.GenerateContentConfig(**config_kwargs)
-        )
+        response = None
+        for _model in ['gemini-2.0-flash-lite', 'gemini-2.0-flash', 'gemini-2.5-flash']:
+            try:
+                response = client.models.generate_content(
+                    model=_model,
+                    contents=prompt,
+                    config=types.GenerateContentConfig(**config_kwargs)
+                )
+                break
+            except Exception as e:
+                print(f'[IPO] {_model} failed: {str(e)[:120]}')
+                continue
+        if response is None:
+            raise Exception('All models exhausted')
 
         data = _parse_json_safe(response.text.strip() if response.text else '')
         if data and ('upcoming' in data or 'recentListings' in data):
@@ -821,31 +855,57 @@ Return ONLY valid JSON. No markdown. No explanation."""
 
 # ═══════════════════════════════════════════════════════════
 # ENDPOINT 11: GET /markets/weekly-brief
-# Artha Weekly Market Brief (cached 7 days)
+# Artha Weekly Market Brief — week-key caching
 # ═══════════════════════════════════════════════════════════
 
-_weekly_cache = {'data': None, 'ts': 0, 'week': 0}
+_weekly_brief_cache = {
+    'data': None,
+    'generated_at': None,
+    'week_key': None,       # "2026-W14" format
+}
+
+def _get_week_key():
+    """Return ISO week key like '2026-W14'."""
+    import datetime as _dt
+    now = _dt.datetime.now()
+    year, week, _ = now.isocalendar()
+    return f"{year}-W{week:02d}"
 
 @markets_bp.route('/markets/weekly-brief', methods=['GET'])
 def get_weekly_brief():
-    now = time.time()
-    # Cache key: ISO week number so it refreshes each week
-    import datetime as dt_module
-    current_week = dt_module.datetime.now().isocalendar()[1]
+    week_key = _get_week_key()
 
-    if (_weekly_cache['data'] and _weekly_cache['week'] == current_week):
-        return jsonify(_weekly_cache['data']), 200
+    # Return cache if it's for the current week AND is real data (not a placeholder)
+    if (
+        _weekly_brief_cache['week_key'] == week_key and
+        _weekly_brief_cache['data'] is not None and
+        _weekly_brief_cache['data'].get('headline') and
+        'being prepared' not in _weekly_brief_cache['data'].get('headline', '')
+    ):
+        return jsonify(_weekly_brief_cache['data']), 200
 
+    # Not Monday and we have old data — return it (better than nothing)
+    import datetime as _dt
+    today = _dt.datetime.now()
+    is_monday = today.weekday() == 0
+
+    if not is_monday and _weekly_brief_cache['data'] and _weekly_brief_cache['data'].get('headline'):
+        return jsonify(_weekly_brief_cache['data']), 200
+
+    # Minimal fallback — NOT a placeholder, always has useful info
     fallback = {
-        'content': 'Weekly market brief is being prepared. Check back shortly.',
-        'weekLabel': f'Week {current_week}',
-        'available': False,
+        'headline': 'Markets closed for the week.',
+        'niftyChange': 'Check indices for details',
+        'topSector': '—',
+        'keyEvent': '—',
+        'weekAhead': 'Markets open Monday 9:15 AM IST',
+        'weekLabel': f"Week of {today.strftime('%d %b %Y')}",
     }
 
+    # Generate fresh brief via Gemini
     try:
         from google import genai
         from google.genai import types
-        import os
 
         api_key = os.environ.get('GEMINI_API_KEY', '')
         if not api_key:
@@ -853,54 +913,50 @@ def get_weekly_brief():
 
         client = genai.Client(api_key=api_key)
 
-        prompt = """You are Artha, a senior Indian market analyst. Generate a concise weekly market brief (150-200 words) for Indian retail investors.
+        prompt = f"""Search for Indian stock market summary for the past week (Monday to Friday).
+Return ONLY this JSON (no markdown, no extras):
+{{
+  "headline": "One sentence. Max 80 chars.",
+  "niftyChange": "+2.1% for the week",
+  "topSector": "IT",
+  "keyEvent": "RBI held rates steady",
+  "weekAhead": "Watch Q4 results: Infosys Apr 17",
+  "weekLabel": "Week of {today.strftime('%d %b %Y')}"
+}}
+Return ONLY valid JSON. No markdown. No explanation."""
 
-Cover:
-1. Last week's Nifty/Sensex performance (% change, key levels)
-2. Top 2-3 sectors that moved significantly
-3. FII/DII activity summary for the week
-4. Key events this week: RBI policy, earnings, global events
-5. One actionable SIP insight for long-term investors
-
-Tone: Professional but accessible. No jargon overload.
-Do NOT give buy/sell recommendations.
-End with a one-line market mood summary.
-
-Return ONLY this JSON:
-{
-  "content": "your brief text here",
-  "weekLabel": "Week of DD MMM YYYY",
-  "niftyWeekChange": percentage_number,
-  "topSector": "sector name",
-  "mood": "BULLISH|BEARISH|CAUTIOUS|SIDEWAYS",
-  "available": true
-}"""
-
-        config_kwargs = {'temperature': 0.4}
+        config_kwargs = {'temperature': 0.3}
         try:
             search_tool = types.Tool(google_search=types.GoogleSearch())
             config_kwargs['tools'] = [search_tool]
         except Exception:
             pass
 
-        response = client.models.generate_content(
-            model='gemini-2.5-flash',
-            contents=prompt,
-            config=types.GenerateContentConfig(**config_kwargs)
-        )
+        response = None
+        for _model in ['gemini-2.0-flash-lite', 'gemini-2.0-flash', 'gemini-2.5-flash']:
+            try:
+                response = client.models.generate_content(
+                    model=_model,
+                    contents=prompt,
+                    config=types.GenerateContentConfig(**config_kwargs)
+                )
+                break
+            except Exception as e:
+                print(f'[WEEKLY] {_model} failed: {str(e)[:120]}')
+                continue
+        if response is None:
+            raise Exception('All models exhausted')
 
         data = _parse_json_safe(response.text.strip() if response.text else '')
-        if data and 'content' in data:
-            data['available'] = True
-            _weekly_cache['data'] = data
-            _weekly_cache['week'] = current_week
-            _weekly_cache['ts'] = now
+        if data and data.get('headline'):
+            _weekly_brief_cache['data'] = data
+            _weekly_brief_cache['week_key'] = week_key
+            _weekly_brief_cache['generated_at'] = time.time()
             return jsonify(data), 200
-
-        _weekly_cache['data'] = fallback
-        _weekly_cache['week'] = current_week
-        return jsonify(fallback), 200
 
     except Exception as e:
         print(f'[WEEKLY] Error: {e}')
-        return jsonify(fallback), 200
+
+    # Do NOT cache the fallback. If Gemini failed (e.g. from a temporary API hiccup or rate limit),
+    # we want the next request to try again instead of being stuck with the fallback all week!
+    return jsonify(fallback), 200

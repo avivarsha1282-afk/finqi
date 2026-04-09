@@ -23,10 +23,12 @@ else:
     CORS(app, origins='*')
 
 # ── Rate Limiting ────────────────────────────────────────────────────────────
+# Dev: generous limits. The app auto-polls every 30s so 50/hr was way too low.
+# Production: tighten if needed after deployment.
 limiter = Limiter(
     key_func=get_remote_address,
     app=app,
-    default_limits=['200 per day', '50 per hour'],
+    default_limits=['10000 per day', '2000 per hour'],
     storage_uri='memory://',
 )
 
@@ -53,6 +55,13 @@ app.register_blueprint(fire_bp, url_prefix='/api')
 app.register_blueprint(tax_bp, url_prefix='/api')
 app.register_blueprint(dashboard_bp, url_prefix='/api')
 app.register_blueprint(chat_bp, url_prefix='/api')
+
+# Artha Conversations (Chat History)
+try:
+    from routes.artha import artha_bp
+    app.register_blueprint(artha_bp, url_prefix='/api')
+except ImportError:
+    pass
 
 # Smart Buy Lens (Phase 7)
 try:
@@ -93,5 +102,5 @@ def root():
 if __name__ == '__main__':
     port = int(os.getenv('PORT', 5000))
     debug = not IS_PRODUCTION
-    print(f'🚀 FinIQ Backend v4.0 starting on port {port} (debug={debug})')
+    print(f'[SYSTEM] FinIQ Backend v4.0 starting on port {port} (debug={debug})')
     app.run(host='0.0.0.0', port=port, debug=debug)

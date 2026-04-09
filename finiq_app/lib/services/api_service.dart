@@ -129,7 +129,81 @@ class ApiService {
     }
   }
 
-  // ─── Chat (routes through Flask backend — rate limiting applied) ─────────
+  // ─── Artha Conversations (CRUD) ────────────────────────────
+  Future<Map<String, dynamic>> createConversation() async {
+    try {
+      final res = await _dio.post('/artha/conversations');
+      return res.data as Map<String, dynamic>;
+    } on DioException catch (e) {
+      throw ApiException(_friendlyError(e), statusCode: e.response?.statusCode);
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> getConversations({int limit = 20}) async {
+    try {
+      final res = await _dio.get('/artha/conversations', queryParameters: {'limit': limit});
+      final data = res.data['conversations'] as List<dynamic>? ?? [];
+      return data.cast<Map<String, dynamic>>();
+    } on DioException catch (e) {
+      throw ApiException(_friendlyError(e), statusCode: e.response?.statusCode);
+    }
+  }
+
+  Future<List<ChatMessage>> getMessages(String conversationId) async {
+    try {
+      final res = await _dio.get('/artha/conversations/$conversationId/messages');
+      final msgs = res.data['messages'] as List<dynamic>? ?? [];
+      return msgs.map((m) => ChatMessage.fromJson(m as Map<String, dynamic>)).toList();
+    } on DioException catch (e) {
+      throw ApiException(_friendlyError(e), statusCode: e.response?.statusCode);
+    }
+  }
+
+  Future<ChatMessage> sendArthaMessage({
+    required String conversationId,
+    required String message,
+    required String language,
+    Map<String, dynamic>? userContext,
+  }) async {
+    try {
+      final res = await _dio.post('/artha/conversations/$conversationId/messages', data: {
+        'message': message,
+        'language': language,
+        'userProfile': userContext ?? {},
+      });
+      final content = res.data['response'] ?? 'No response';
+      return ChatMessage.artha(content.toString());
+    } on DioException catch (e) {
+      final status = e.response?.statusCode;
+      final msg = status == 429
+          ? 'Artha is busy — try again in a moment 🙏'
+          : status == 401
+          ? 'Session expired. Please sign in again.'
+          : _friendlyError(e);
+      throw ApiException(msg, statusCode: status);
+    }
+  }
+
+  Future<void> deleteConversation(String conversationId) async {
+    try {
+      await _dio.delete('/artha/conversations/$conversationId');
+    } on DioException catch (e) {
+      throw ApiException(_friendlyError(e), statusCode: e.response?.statusCode);
+    }
+  }
+
+
+  // ─── Dashboard ─────────────────────────────────────────────
+  Future<Map<String, dynamic>> getDashboard() async {
+    try {
+      final res = await _dio.get('/user/dashboard');
+      return res.data as Map<String, dynamic>;
+    } on DioException catch (e) {
+      throw ApiException(_friendlyError(e));
+    }
+  }
+
+  // ─── Old Chat Integration (Deprecated) ─────────────────────
   Future<ChatMessage> sendMessage({
     required String message,
     required List<ChatMessage> history,
@@ -137,7 +211,6 @@ class ApiService {
     Map<String, dynamic>? userContext,
   }) async {
     try {
-      // Build a compact conversation history (last 8 messages to stay within context limits)
       final recentHistory = history.where((m) => !m.isLoading && m.content.isNotEmpty).toList();
       final trimmed = recentHistory.length > 8
           ? recentHistory.sublist(recentHistory.length - 8)
@@ -156,7 +229,6 @@ class ApiService {
       final content = res.data['content'] ?? res.data['reply'] ?? 'No response';
       return ChatMessage.artha(content.toString());
     } on DioException catch (e) {
-      // Surface a friendlier error rather than a raw exception
       final status = e.response?.statusCode;
       final msg = status == 429
           ? 'Artha is busy — try again in a moment 🙏'
@@ -164,17 +236,6 @@ class ApiService {
           ? 'Session expired. Please sign in again.'
           : _friendlyError(e);
       throw ApiException(msg, statusCode: status);
-    }
-  }
-
-
-  // ─── Dashboard ─────────────────────────────────────────────
-  Future<Map<String, dynamic>> getDashboard() async {
-    try {
-      final res = await _dio.get('/user/dashboard');
-      return res.data as Map<String, dynamic>;
-    } on DioException catch (e) {
-      throw ApiException(_friendlyError(e));
     }
   }
 

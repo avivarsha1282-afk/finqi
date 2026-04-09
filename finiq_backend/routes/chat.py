@@ -51,6 +51,29 @@ def chat_message():
             if val is not None and val != '' and val != 0:
                 user_context[key] = val
 
+    # ═══════════════════════════════════════════════════════════
+    # ARTHA DEBUG LOGGING — Phase 1 diagnostics
+    # ═══════════════════════════════════════════════════════════
+    user_found = user is not None
+    user_profile = user_context  # merged context
+
+    print("=" * 50)
+    print(f"[ARTHA] Request received")
+    print(f"[ARTHA] User message: {message[:80]}")
+    print(f"[ARTHA] UID in request: {uid}")
+    print(f"[ARTHA] User found in DB: {user_found}")
+    _ms = user_profile.get('monthly_salary') or user_profile.get('monthly_income') or user_profile.get('monthlyIncome') or 0
+    print(f"[ARTHA] Monthly income in profile: {_ms}")
+    _me = user_profile.get('monthly_expense') or user_profile.get('monthlyExpenses') or 0
+    try:
+        _surplus = float(_ms) - float(_me)
+    except (TypeError, ValueError):
+        _surplus = 'CALC_ERROR'
+    print(f"[ARTHA] Monthly surplus: {_surplus}")
+    print(f"[ARTHA] Profile keys present: "
+          f"{list(user_profile.keys())}")
+    print("=" * 50)
+
     try:
         reply = get_artha_response(message, history, user_context, language)
 

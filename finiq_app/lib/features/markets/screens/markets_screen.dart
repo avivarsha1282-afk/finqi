@@ -96,6 +96,7 @@ class _MarketsScreenState extends ConsumerState<MarketsScreen> with TickerProvid
           ref.invalidate(arthaMarketProvider);
           ref.invalidate(marketsNewsProvider);
           ref.invalidate(marketsIPOProvider);
+          ref.invalidate(weeklyBriefProvider);
         },
         child: CustomScrollView(slivers: [
           // ── HEADER ──
@@ -143,13 +144,6 @@ class _MarketsScreenState extends ConsumerState<MarketsScreen> with TickerProvid
           SliverToBoxAdapter(child: const SizedBox(height: 20)),
           SliverToBoxAdapter(child: ArthaCard()),
 
-          // ── COMMODITIES ──
-          SliverToBoxAdapter(child: overviewAsync.when(
-            loading: () => const SizedBox.shrink(),
-            error: (_, __) => const SizedBox.shrink(),
-            data: (d) => CommoditiesStrip(commodities: d.commodities),
-          )),
-
           // ── SENTIMENT ──
           SliverToBoxAdapter(child: overviewAsync.when(
             loading: () => const SizedBox.shrink(),
@@ -162,6 +156,13 @@ class _MarketsScreenState extends ConsumerState<MarketsScreen> with TickerProvid
             loading: () => const SizedBox.shrink(),
             error: (_, __) => const SizedBox.shrink(),
             data: (d) => IndicesStrip(indices: d.indices, onTap: _openStockSheet),
+          )),
+
+          // ── COMMODITIES ──
+          SliverToBoxAdapter(child: overviewAsync.when(
+            loading: () => const SizedBox.shrink(),
+            error: (_, __) => const SizedBox.shrink(),
+            data: (d) => CommoditiesStrip(commodities: d.commodities),
           )),
 
           // ── SECTORS HEATMAP ──
