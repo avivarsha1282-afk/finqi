@@ -268,7 +268,7 @@ def _call_gemini(prompt, images_b64):
             err_str = str(e)
             print(f"[SMART_BUY] {attempt_model} failed: {err_str[:150]}...")
             last_error = err_str
-            if '429' in err_str or 'quota' in err_str.lower() or '404' in err_str:
+            if '429' in err_str or 'quota' in err_str.lower() or '404' in err_str or '503' in err_str:
                 continue
 
     raise Exception(f"All models failed. Last error: {last_error}")

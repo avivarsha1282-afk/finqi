@@ -176,7 +176,7 @@ def _call_gemini(prompt: str, user_message: str, max_retries: int = 3) -> str:
             last_error = err_str
             
             # If it's a 429 quota exhaustion or 404 not found, immediately try next model
-            if '429' in err_str or 'quota' in err_str.lower() or '404' in err_str:
+            if '429' in err_str or 'quota' in err_str.lower() or '404' in err_str or '503' in err_str:
                 continue
                 
     return _get_fallback(user_message)
