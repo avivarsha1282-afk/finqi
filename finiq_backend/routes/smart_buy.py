@@ -228,9 +228,7 @@ def _parse_json_safely(text):
 
 # ── Gemini call helper (IMAGE — JSON mode, no search) ────────────
 def _call_gemini(prompt, images_b64):
-    """Call Gemini 2.5 Flash with one or more images.
-    Uses response_mime_type='application/json' for reliable parsing.
-    Returns parsed JSON dict or raises Exception."""
+    """Call Gemini with intelligent model fallback (JSON mode, no search)."""
     from google import genai
     from google.genai import types
 
@@ -244,20 +242,36 @@ def _call_gemini(prompt, images_b64):
         ))
     contents.append(types.Part.from_text(text=prompt))
 
-    response = client.models.generate_content(
-        model='gemini-2.5-flash',
-        contents=contents,
-        config=types.GenerateContentConfig(
-            temperature=0.2,
-            response_mime_type='application/json',
-        )
-    )
+    models_to_try = [
+        'gemini-2.0-flash',
+        'gemini-2.5-flash',
+        'gemini-2.0-flash-lite'
+    ]
 
-    result_text = response.text.strip()
-    parsed = _parse_json_safely(result_text)
-    if not parsed:
-        raise json.JSONDecodeError('Empty parse result', result_text, 0)
-    return parsed
+    last_error = ""
+    for attempt_model in models_to_try:
+        try:
+            response = client.models.generate_content(
+                model=attempt_model,
+                contents=contents,
+                config=types.GenerateContentConfig(
+                    temperature=0.2,
+                    response_mime_type='application/json',
+                )
+            )
+
+            result_text = response.text.strip() if response.text else ''
+            parsed = _parse_json_safely(result_text)
+            if parsed:
+                return parsed
+        except Exception as e:
+            err_str = str(e)
+            print(f"[SMART_BUY] {attempt_model} failed: {err_str[:150]}...")
+            last_error = err_str
+            if '429' in err_str or 'quota' in err_str.lower() or '404' in err_str:
+                continue
+
+    raise Exception(f"All models failed. Last error: {last_error}")
 
 
 # ── Gemini call helper (TEXT — with Google Search grounding) ─────

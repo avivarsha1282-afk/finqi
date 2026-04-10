@@ -32,8 +32,8 @@ class _SmartBuyScreenState extends ConsumerState<SmartBuyScreen> {
     setState(() => _state = SmartBuyState.analyzing);
 
     try {
-      final res = await ApiService.instance.postData('/smart-buy/compare', {
-        'image_base64': _imageBase64,
+      final res = await ApiService.instance.postData('/smart-buy/analyse/single', {
+        'image': _imageBase64,
       });
 
       if (res['success'] == true && res['analysis'] != null) {
