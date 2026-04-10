@@ -39,7 +39,7 @@ SECTORS = {
 
 # Sector → top stocks mapping for sector detail sheet
 SECTOR_STOCKS = {
-    "Auto":    {"Maruti": "MARUTI.NS", "Tata Motors": "TATAMOTORS.NS", "M&M": "M&M.NS", "Bajaj Auto": "BAJAJ-AUTO.NS", "Eicher Motors": "EICHERMOT.NS"},
+    "Auto":    {"Maruti": "MARUTI.NS", "TVS Motor": "TVSMOTOR.NS", "M&M": "M&M.NS", "Bajaj Auto": "BAJAJ-AUTO.NS", "Eicher Motors": "EICHERMOT.NS"},
     "FMCG":    {"HUL": "HINDUNILVR.NS", "ITC": "ITC.NS", "Nestle": "NESTLEIND.NS", "Brit Industries": "BRITANNIA.NS", "Tata Consumer": "TATACONSUM.NS"},
     "Pharma":  {"Sun Pharma": "SUNPHARMA.NS", "Dr Reddy": "DRREDDY.NS", "Cipla": "CIPLA.NS", "Divis Lab": "DIVISLAB.NS", "Apollo Hosp": "APOLLOHOSP.NS"},
     "Metal":   {"Tata Steel": "TATASTEEL.NS", "JSW Steel": "JSWSTEEL.NS", "Hindalco": "HINDALCO.NS", "Coal India": "COALINDIA.NS", "ONGC": "ONGC.NS"},
@@ -82,7 +82,7 @@ NIFTY50_STOCKS = {
     "Bajaj Finserv": "BAJAJFINSV.NS",
     "Power Grid":    "POWERGRID.NS",
     "NTPC":          "NTPC.NS",
-    "Tata Motors":   "TATAMOTORS.NS",
+    "TVS Motor":     "TVSMOTOR.NS",
     "Tata Steel":    "TATASTEEL.NS",
     "Coal India":    "COALINDIA.NS",
     "JSW Steel":     "JSWSTEEL.NS",
@@ -527,31 +527,10 @@ Return ONLY valid JSON. No markdown. No explanation."""
     }
 
     try:
-        from google import genai
-        from google.genai import types
+        from engines.gemini_pool import smart_generate_with_search
 
-        client = genai.Client(api_key=os.getenv('GEMINI_API_KEY'))
-        config_kwargs = {'temperature': 0.3}
-        try:
-            search_tool = types.Tool(google_search=types.GoogleSearch())
-            config_kwargs['tools'] = [search_tool]
-        except Exception:
-            pass
-
-        response = None
-        for _model in ['gemini-2.0-flash-lite', 'gemini-2.0-flash', 'gemini-2.5-flash']:
-            try:
-                response = client.models.generate_content(
-                    model=_model,
-                    contents=prompt,
-                    config=types.GenerateContentConfig(**config_kwargs)
-                )
-                break
-            except Exception as e:
-                print(f'[ARTHA] {_model} failed: {str(e)[:120]}')
-                continue
-        if response is None:
-            raise Exception('All models exhausted')
+        # Uses DEFAULT_MODEL_CASCADE from gemini_pool (2.5-flash first)
+        response = smart_generate_with_search(contents=prompt, temperature=0.3)
 
         data = _parse_json_safe(response.text.strip() if response.text else '')
         if data and 'marketSummary' in data:
@@ -604,31 +583,10 @@ Return ONLY the JSON array. No markdown. No explanation."""
     ]
 
     try:
-        from google import genai
-        from google.genai import types
+        from engines.gemini_pool import smart_generate_with_search
 
-        client = genai.Client(api_key=os.getenv('GEMINI_API_KEY'))
-        config_kwargs = {'temperature': 0.3}
-        try:
-            search_tool = types.Tool(google_search=types.GoogleSearch())
-            config_kwargs['tools'] = [search_tool]
-        except Exception:
-            pass
-
-        response = None
-        for _model in ['gemini-2.0-flash-lite', 'gemini-2.0-flash', 'gemini-2.5-flash']:
-            try:
-                response = client.models.generate_content(
-                    model=_model,
-                    contents=prompt,
-                    config=types.GenerateContentConfig(**config_kwargs)
-                )
-                break
-            except Exception as e:
-                print(f'[NEWS] {_model} failed: {str(e)[:120]}')
-                continue
-        if response is None:
-            raise Exception('All models exhausted')
+        # Uses DEFAULT_MODEL_CASCADE from gemini_pool (2.5-flash first)
+        response = smart_generate_with_search(contents=prompt, temperature=0.3)
 
         text = response.text.strip() if response.text else ''
         # Parse JSON array
@@ -808,31 +766,10 @@ Return ONLY valid JSON. No markdown. No explanation."""
     fallback = {'upcoming': [], 'recentListings': []}
 
     try:
-        from google import genai
-        from google.genai import types
+        from engines.gemini_pool import smart_generate_with_search
 
-        client = genai.Client(api_key=os.getenv('GEMINI_API_KEY'))
-        config_kwargs = {'temperature': 0.3}
-        try:
-            search_tool = types.Tool(google_search=types.GoogleSearch())
-            config_kwargs['tools'] = [search_tool]
-        except Exception:
-            pass
-
-        response = None
-        for _model in ['gemini-2.0-flash-lite', 'gemini-2.0-flash', 'gemini-2.5-flash']:
-            try:
-                response = client.models.generate_content(
-                    model=_model,
-                    contents=prompt,
-                    config=types.GenerateContentConfig(**config_kwargs)
-                )
-                break
-            except Exception as e:
-                print(f'[IPO] {_model} failed: {str(e)[:120]}')
-                continue
-        if response is None:
-            raise Exception('All models exhausted')
+        # Uses DEFAULT_MODEL_CASCADE from gemini_pool (2.5-flash first)
+        response = smart_generate_with_search(contents=prompt, temperature=0.3)
 
         data = _parse_json_safe(response.text.strip() if response.text else '')
         if data and ('upcoming' in data or 'recentListings' in data):
@@ -904,14 +841,7 @@ def get_weekly_brief():
 
     # Generate fresh brief via Gemini
     try:
-        from google import genai
-        from google.genai import types
-
-        api_key = os.environ.get('GEMINI_API_KEY', '')
-        if not api_key:
-            return jsonify(fallback), 200
-
-        client = genai.Client(api_key=api_key)
+        from engines.gemini_pool import smart_generate_with_search
 
         prompt = f"""Search for Indian stock market summary for the past week (Monday to Friday).
 Return ONLY this JSON (no markdown, no extras):
@@ -925,27 +855,8 @@ Return ONLY this JSON (no markdown, no extras):
 }}
 Return ONLY valid JSON. No markdown. No explanation."""
 
-        config_kwargs = {'temperature': 0.3}
-        try:
-            search_tool = types.Tool(google_search=types.GoogleSearch())
-            config_kwargs['tools'] = [search_tool]
-        except Exception:
-            pass
-
-        response = None
-        for _model in ['gemini-2.0-flash-lite', 'gemini-2.0-flash', 'gemini-2.5-flash']:
-            try:
-                response = client.models.generate_content(
-                    model=_model,
-                    contents=prompt,
-                    config=types.GenerateContentConfig(**config_kwargs)
-                )
-                break
-            except Exception as e:
-                print(f'[WEEKLY] {_model} failed: {str(e)[:120]}')
-                continue
-        if response is None:
-            raise Exception('All models exhausted')
+        # Uses DEFAULT_MODEL_CASCADE from gemini_pool (2.5-flash first)
+        response = smart_generate_with_search(contents=prompt, temperature=0.3)
 
         data = _parse_json_safe(response.text.strip() if response.text else '')
         if data and data.get('headline'):

@@ -25,6 +25,7 @@ class DashboardData {
   final double goalSavings;
   final double monthlySipNeeded;
   final bool isOffline;
+  final Map<String, dynamic>? profile;
 
   DashboardData({
     required this.userName,
@@ -40,6 +41,7 @@ class DashboardData {
     required this.goalSavings,
     required this.monthlySipNeeded,
     this.isOffline = false,
+    this.profile,
   });
 }
 
@@ -234,6 +236,7 @@ Future<DashboardData> _buildDashboardData(Map<String, dynamic> profile, bool off
     goalSavings: currentSavings,
     monthlySipNeeded: sip,
     isOffline: offline,
+    profile: profile,
   );
 }
 

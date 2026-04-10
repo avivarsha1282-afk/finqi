@@ -72,6 +72,7 @@ Risk Appetite: {profile.get('risk_appetite')}
 
 CALCULATED RESULTS:
 Health Score: {total_score}/100 (Grade {grade})
+IMPORTANT: The health score is EXACTLY {total_score}. Do NOT use any other number.
 Required Monthly SIP: {_fmt(required_sip)}
 Tax Saving Available: {_fmt(tax_saving)}
 
@@ -250,6 +251,47 @@ def update_profile():
     filtered = {k: v for k, v in data.items() if k in allowed}
     if filtered:
         update_user_fields(uid, filtered)
+
+        # ── Recalculate FIRE + Health Score with fresh data ──
+        try:
+            user = get_user_by_uid(uid)
+            profile = user.get('profile', {}) if user else {}
+
+            # Recalculate FIRE plan
+            from engines.fire_engine import calculate_fire_plan
+            target_amount = float(profile.get('financial_goal_amount', 10000000))
+            years = int(profile.get('target_timeline', 7))
+            current_savings = float(profile.get('current_savings', 0))
+            monthly_income = float(profile.get('monthly_salary', 0))
+
+            new_fire = calculate_fire_plan(
+                target_amount=target_amount,
+                years=years,
+                current_savings=current_savings,
+                monthly_income=monthly_income,
+            )
+            if fire_plans_collection is not None:
+                fire_plans_collection.update_one(
+                    {'firebase_uid': uid},
+                    {'$set': {**new_fire, 'firebase_uid': uid}},
+                    upsert=True
+                )
+            print(f"[PROFILE] FIRE recalculated for {uid}: SIP={new_fire.get('required_monthly_sip')}")
+
+            # Recalculate Health Score
+            from engines.health_score_engine import calculate_health_score
+            new_score = calculate_health_score(profile)
+            if health_scores_collection is not None:
+                health_scores_collection.update_one(
+                    {'firebase_uid': uid},
+                    {'$set': {**new_score, 'firebase_uid': uid}},
+                    upsert=True
+                )
+            print(f"[PROFILE] Health score recalculated: {new_score.get('total_score')}")
+
+        except Exception as e:
+            print(f"[PROFILE] Recalc error (non-fatal): {e}")
+
         # Invalidate cached Gemini dashboard so it regenerates on next load
         try:
             if users_collection is not None:
@@ -260,3 +302,4 @@ def update_profile():
         except Exception:
             pass
     return jsonify({'success': True}), 200
+

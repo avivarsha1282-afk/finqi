@@ -7,6 +7,7 @@ import '../../../services/user_prefs_service.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../language/providers/language_provider.dart';
+import '../../../l10n/t.dart';
 import '../providers/score_provider.dart';
 
 class HealthScoreScreen extends ConsumerWidget {
@@ -20,12 +21,12 @@ class HealthScoreScreen extends ConsumerWidget {
     return scoreAsync.when(
       loading: () => Scaffold(
         backgroundColor: AppColors.backgroundColor,
-        appBar: AppBar(title: Text(lang == 'hi' ? 'वित्तीय स्वास्थ्य' : 'Financial Health', style: AppTextStyles.subheading)),
+        appBar: AppBar(title: Text(t(ref, 'financial_health'), style: AppTextStyles.subheading)),
         body: const Center(child: CircularProgressIndicator(color: AppColors.primaryTeal)),
       ),
       error: (e, _) => Scaffold(
         backgroundColor: AppColors.backgroundColor,
-        appBar: AppBar(title: Text(lang == 'hi' ? 'वित्तीय स्वास्थ्य' : 'Financial Health', style: AppTextStyles.subheading)),
+        appBar: AppBar(title: Text(t(ref, 'financial_health'), style: AppTextStyles.subheading)),
         body: Center(child: Text('Error: $e', style: const TextStyle(color: Colors.white))),
       ),
       data: (score) => _buildBody(context, ref, score, lang),
@@ -44,7 +45,7 @@ class HealthScoreScreen extends ConsumerWidget {
     return Scaffold(
       backgroundColor: AppColors.backgroundColor,
       appBar: AppBar(
-        title: Text(lang == 'hi' ? 'वित्तीय स्वास्थ्य' : 'Financial Health', style: AppTextStyles.subheading),
+        title: Text(t(ref, 'financial_health'), style: AppTextStyles.subheading),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh_rounded, size: 20, color: AppColors.primaryTeal),

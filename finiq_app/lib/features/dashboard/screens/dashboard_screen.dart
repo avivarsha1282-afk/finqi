@@ -6,6 +6,7 @@ import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../language/providers/language_provider.dart';
+import '../../../l10n/t.dart';
 import '../providers/dashboard_provider.dart';
 
 class DashboardScreen extends ConsumerStatefulWidget {
@@ -77,12 +78,12 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                lang == 'hi' ? 'नमस्ते, ${data.userName} 👋' : 'Hi, ${data.userName} 👋',
+                                '${t(ref, 'home_greeting')}, ${data.userName} 👋',
                                 style: AppTextStyles.heading2,
                               ),
                               const SizedBox(height: 4),
                               Text(
-                                lang == 'hi' ? 'आज आपकी वित्तीय स्थिति' : 'Your financial snapshot',
+                                t(ref, 'home_subtitle'),
                                 style: AppTextStyles.bodySmall,
                               ),
                             ],
@@ -124,7 +125,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(
-                                lang == 'hi' ? 'ऑफ़लाइन डेटा दिखा रहा है। ताज़ा करने के लिए नीचे खींचें।' : 'Showing offline data. Pull or tap refresh when online.',
+                                t(ref, 'offline_banner'),
                                 style: TextStyle(color: AppColors.dangerRed, fontSize: 12),
                               ),
                             ),

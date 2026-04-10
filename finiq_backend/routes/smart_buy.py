@@ -228,11 +228,9 @@ def _parse_json_safely(text):
 
 # ── Gemini call helper (IMAGE — JSON mode, no search) ────────────
 def _call_gemini(prompt, images_b64):
-    """Call Gemini with intelligent model fallback (JSON mode, no search)."""
-    from google import genai
+    """Call Gemini with intelligent model fallback & key rotation."""
     from google.genai import types
-
-    client = genai.Client(api_key=os.getenv('GEMINI_API_KEY'))
+    from engines.gemini_pool import smart_generate
 
     contents = []
     for img_b64 in images_b64:
@@ -242,47 +240,29 @@ def _call_gemini(prompt, images_b64):
         ))
     contents.append(types.Part.from_text(text=prompt))
 
-    models_to_try = [
-        'gemini-2.0-flash',
-        'gemini-2.5-flash',
-        'gemini-2.0-flash-lite'
-    ]
+    # Use DEFAULT_MODEL_CASCADE from pool (2.5-flash has most quota)
 
-    last_error = ""
-    for attempt_model in models_to_try:
-        try:
-            response = client.models.generate_content(
-                model=attempt_model,
-                contents=contents,
-                config=types.GenerateContentConfig(
-                    temperature=0.2,
-                    response_mime_type='application/json',
-                )
-            )
+    response = smart_generate(
+        contents=contents,
+        config=types.GenerateContentConfig(
+            temperature=0.2,
+            response_mime_type='application/json',
+        )
+    )
 
-            result_text = response.text.strip() if response.text else ''
-            parsed = _parse_json_safely(result_text)
-            if parsed:
-                return parsed
-        except Exception as e:
-            err_str = str(e)
-            print(f"[SMART_BUY] {attempt_model} failed: {err_str[:150]}...")
-            last_error = err_str
-            if '429' in err_str or 'quota' in err_str.lower() or '404' in err_str or '503' in err_str:
-                continue
-
-    raise Exception(f"All models failed. Last error: {last_error}")
+    result_text = response.text.strip() if response and response.text else ''
+    parsed = _parse_json_safely(result_text)
+    if parsed:
+        return parsed
+        
+    raise Exception("Parsed empty or invalid response from AI pool")
 
 
 # ── Gemini call helper (TEXT — with Google Search grounding) ─────
 def _call_gemini_text(prompt, use_search=True):
-    """Call Gemini 2.5 Flash with text-only prompt.
-    Optionally enables Google Search grounding for online data.
-    Returns parsed JSON dict or empty dict on failure."""
-    from google import genai
+    """Call Gemini with text-only prompt and API Key rotation."""
     from google.genai import types
-
-    client = genai.Client(api_key=os.getenv('GEMINI_API_KEY'))
+    from engines.gemini_pool import smart_generate
 
     config_kwargs = {'temperature': 0.3}
     if use_search:
@@ -292,13 +272,14 @@ def _call_gemini_text(prompt, use_search=True):
         except Exception as e:
             print(f'Search grounding not available: {e}')
 
-    response = client.models.generate_content(
-        model='gemini-2.5-flash',
-        contents=prompt,
-        config=types.GenerateContentConfig(**config_kwargs)
-    )
-
-    return _parse_json_safely(response.text.strip() if response.text else '')
+    models_to_try = None  # Uses DEFAULT_MODEL_CASCADE from pool
+    
+    try:
+        response = smart_generate(models_to_try, prompt, types.GenerateContentConfig(**config_kwargs))
+        return _parse_json_safely(response.text.strip() if response and response.text else '')
+    except Exception as e:
+        print(f"[SMART_BUY_TEXT] Text pool failed: {e}")
+        return {}
 
 
 # ── Online search step (runs after image analysis) ───────────────
@@ -516,7 +497,14 @@ Return ONLY this JSON:
         }), 200
 
     except Exception as e:
-        _log_error('analyse/single', uid, type(e).__name__, str(e)[:200])
+        err_str = str(e)
+        _log_error('analyse/single', uid, type(e).__name__, err_str[:200])
+        if '429' in err_str or 'quota' in err_str.lower():
+            return jsonify({
+                'success': False,
+                'error': 'Google AI free tier limit reached (15 scans/min). Please wait 60 seconds and try again.',
+            }), 200
+            
         return jsonify({
             'success': False,
             'error': 'Could not analyse the product. Try again with a clearer photo.',
@@ -669,7 +657,14 @@ Return ONLY this JSON:
         }), 200
 
     except Exception as e:
-        _log_error('analyse/compare', uid, type(e).__name__, str(e)[:200])
+        err_str = str(e)
+        _log_error('analyse/compare', uid, type(e).__name__, err_str[:200])
+        if '429' in err_str or 'quota' in err_str.lower():
+            return jsonify({
+                'success': False,
+                'error': 'Google AI free tier limit reached. Please wait 60 seconds and try again.',
+            }), 200
+            
         return jsonify({
             'success': False,
             'error': 'Could not compare products. Try again.',

@@ -9,6 +9,7 @@ import '../../../core/utils/currency_formatter.dart';
 import '../../../services/user_data_service.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../language/providers/language_provider.dart';
+import '../../../l10n/t.dart';
 
 class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({super.key});
@@ -48,7 +49,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             }
           },
         ),
-        title: Text(lang == 'hi' ? 'प्रोफ़ाइल' : 'Profile', style: AppTextStyles.subheading),
+        title: Text(t(ref, 'profile'), style: AppTextStyles.subheading),
         actions: [
           TextButton(
             onPressed: () => context.push('/profile/edit'),

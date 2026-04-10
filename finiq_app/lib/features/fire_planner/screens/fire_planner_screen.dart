@@ -11,6 +11,7 @@ import '../../../core/utils/currency_input_formatter.dart';
 import '../../../models/fire_plan_model.dart';
 import '../../../services/api_service.dart';
 import '../../language/providers/language_provider.dart';
+import '../../../l10n/t.dart';
 import '../providers/fire_provider.dart';
 
 class FirePlannerScreen extends ConsumerStatefulWidget {
@@ -69,10 +70,33 @@ class _FirePlannerScreenState extends ConsumerState<FirePlannerScreen> {
     if (_plan == null) {
       return Scaffold(
         backgroundColor: AppColors.backgroundColor,
+        appBar: AppBar(
+        title: Text(t(ref, 'fire_planner'), style: AppTextStyles.subheading),
+        ),
         body: Center(
           child: _isLoading
               ? const CircularProgressIndicator(color: AppColors.primaryTeal)
-              : const Text('Failed to calculate FIRE plan.', style: TextStyle(color: AppColors.textSecondary)),
+              : Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.local_fire_department_rounded, color: AppColors.textTertiary, size: 48),
+                    const SizedBox(height: 16),
+                    Text(
+                      t(ref, 'fire_error_retry'),
+                      style: const TextStyle(color: AppColors.textSecondary, fontSize: 16),
+                    ),
+                    const SizedBox(height: 12),
+                    ElevatedButton.icon(
+                      onPressed: () => _fetchPlan(ref.read(fireInputProvider)),
+                      icon: const Icon(Icons.refresh_rounded, size: 18),
+                      label: Text(t(ref, 'retry')),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primaryTeal,
+                        foregroundColor: Colors.black,
+                      ),
+                    ),
+                  ],
+                ),
         ),
       );
     }
@@ -83,7 +107,7 @@ class _FirePlannerScreenState extends ConsumerState<FirePlannerScreen> {
         Scaffold(
           backgroundColor: AppColors.backgroundColor,
           appBar: AppBar(
-        title: Text(lang == 'hi' ? 'FIRE प्लानर 🔥' : 'FIRE Planner 🔥', style: AppTextStyles.subheading),
+        title: Text(t(ref, 'fire_planner'), style: AppTextStyles.subheading),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh_rounded, size: 20, color: AppColors.primaryTeal),

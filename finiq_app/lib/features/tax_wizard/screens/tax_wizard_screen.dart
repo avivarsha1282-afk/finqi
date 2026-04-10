@@ -9,6 +9,7 @@ import '../../../models/tax_report_model.dart';
 import '../../../services/api_service.dart';
 import '../../../services/user_data_service.dart';
 import '../../language/providers/language_provider.dart';
+import '../../../l10n/t.dart';
 
 class TaxWizardScreen extends ConsumerStatefulWidget {
   const TaxWizardScreen({super.key});
@@ -60,12 +61,11 @@ class _TaxWizardScreenState extends ConsumerState<TaxWizardScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final lang = ref.watch(languageProvider);
 
     return Scaffold(
       backgroundColor: AppColors.backgroundColor,
       appBar: AppBar(
-        title: Text(lang == 'hi' ? 'टैक्स तुलना' : 'Tax Wizard', style: AppTextStyles.subheading),
+        title: Text(t(ref, 'tax_wizard'), style: AppTextStyles.subheading),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh_rounded, size: 20, color: AppColors.primaryTeal),

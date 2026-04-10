@@ -8,6 +8,7 @@ import '../../../core/constants/app_colors.dart';
 import '../../../models/chat_message_model.dart';
 import '../../../services/user_data_service.dart';
 import '../../language/providers/language_provider.dart';
+import '../../../l10n/t.dart';
 
 class ArthaChatScreen extends ConsumerStatefulWidget {
   const ArthaChatScreen({super.key});
@@ -198,7 +199,7 @@ class _ArthaChatScreenState extends ConsumerState<ArthaChatScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text('Artha', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white)),
-                Text(lang == 'hi' ? 'AI वित्तीय सलाहकार' : 'AI Financial Mentor',
+                Text(t(ref, 'ai_financial_mentor'),
                     style: const TextStyle(fontSize: 10, color: AppColors.textTertiary)),
               ],
             ),
@@ -250,7 +251,7 @@ class _ArthaChatScreenState extends ConsumerState<ArthaChatScreen> {
                           maxLines: 3,
                           minLines: 1,
                           decoration: InputDecoration(
-                            hintText: lang == 'hi' ? 'अर्थ से पूछें...' : 'Ask Artha anything...',
+                            hintText: t(ref, 'ask_artha'),
                             hintStyle: const TextStyle(color: AppColors.textTertiary),
                             filled: true,
                             fillColor: const Color(0xFF1A1A1A),

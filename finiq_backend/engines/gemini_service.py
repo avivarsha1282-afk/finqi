@@ -73,16 +73,27 @@ def sanitise_user_input(user_message: str) -> str:
     return user_message[:2000]
 
 ARTHA_SYSTEM_PROMPT_HI = """
-आप अर्था हैं, एक गर्मजोशी से भरे, बुद्धिमान व्यक्तिगत वित्तीय सलाहकार।
-आप हिंदी में बात करें।
-नियम:
-- भारतीय वित्तीय शब्दों का उपयोग करें: SIP, PPF, NPS, ELSS, 80C, 80D
-- हमेशा ₹ चिह्न और भारतीय संख्या प्रारूप (L, Cr) का उपयोग करें
-- कभी भी स्टॉक या क्रिप्टो की सिफारिश न करें
-- 3 वाक्यों से कम में जवाब दें
+आप अर्था हैं, FinIQ के AI वित्तीय सलाहकार — भारतीय वेतनभोगी पेशेवरों के लिए।
+
+आपका पूरा जवाब हिंदी में होना चाहिए। एक भी अंग्रेज़ी वाक्य न लिखें।
+वित्तीय शब्द (SIP, PPF, NPS, ELSS, 80C, 80D, EMI) का मूल रूप में उपयोग करें।
+
+आपका व्यक्तित्व:
+- गर्मजोशी से भरे, मददगार — जैसे कोई CA दोस्त जो आपको अच्छे से जानता हो
+- हमेशा उपयोगकर्ता की असली ₹ संख्याओं का उपयोग करें
+- सामान्य सलाह कभी न दें — हमेशा व्यक्तिगत
+- 120 शब्दों से कम में जवाब दें जब तक विस्तार न माँगा जाए
+- सूचियों के लिए बुलेट पॉइंट, सलाह के लिए सादा पाठ
 - हमेशा उपयोगकर्ता को उनके नाम से संबोधित करें
-- उनकी विशिष्ट संख्याओं का उल्लेख करें
+- ₹ चिह्न और भारतीय संख्या प्रारूप (₹1.5L, ₹2Cr) का उपयोग करें
+
+बातचीत के नियम:
+- हर जवाब के अंत में एक बार ही SEBI अस्वीकरण लिखें:
+  "यह वित्तीय शिक्षा है, SEBI सलाह नहीं।"
+  लेकिन केवल जब विशिष्ट निवेश मार्गदर्शन दे रहे हों।
+- कभी न कहें "मैं नहीं बता सकता" — हमेशा मदद करने का प्रयास करें
 """
+
 
 ARTHA_SYSTEM_PROMPT_TA = """
 நீங்கள் அர்தா, ஒரு அன்பான, புத்திசாலி தனிப்பட்ட நிதி வழிகாட்டி.
@@ -145,8 +156,9 @@ def _format_inr(value):
         return "Unknown"
 
 def _call_gemini(prompt: str, user_message: str, max_retries: int = 3) -> str:
-    global _last_request_time
-    # Intelligent Fallback Cascade to bypass strict new API key limits (e.g. 20/day)
+    from engines.gemini_pool import smart_generate
+    from google.genai import types
+    
     models_to_try = [
         'gemini-2.0-flash-lite',
         'gemini-flash-lite-latest',
@@ -154,32 +166,16 @@ def _call_gemini(prompt: str, user_message: str, max_retries: int = 3) -> str:
         'gemini-2.5-flash'
     ]
     
-    last_error = ""
-    for attempt_model in models_to_try:
-        with _lock:
-            now = time.time()
-            wait = _MIN_INTERVAL_SECS - (now - _last_request_time)
-            if wait > 0:
-                time.sleep(wait)
-            _last_request_time = time.time()
-
-        try:
-            resp = _client.models.generate_content(
-                model=attempt_model,
-                contents=prompt,
-                config=types.GenerateContentConfig(temperature=0.7),
-            )
-            return resp.text
-        except Exception as e:
-            err_str = str(e)
-            print(f"[GEMINI] {attempt_model} failed: {err_str[:150]}...")
-            last_error = err_str
-            
-            # If it's a 429 quota exhaustion or 404 not found, immediately try next model
-            if '429' in err_str or 'quota' in err_str.lower() or '404' in err_str or '503' in err_str:
-                continue
-                
-    return _get_fallback(user_message)
+    try:
+        response = smart_generate(
+            models_to_try,
+            prompt,
+            types.GenerateContentConfig(temperature=0.7)
+        )
+        return response.text if response and response.text else _get_fallback(user_message)
+    except Exception as e:
+        print(f"[ARTHA_POOL_FAIL] {e}")
+        return _get_fallback(user_message)
 
 
 def get_artha_response(message: str, conversation_history: list,

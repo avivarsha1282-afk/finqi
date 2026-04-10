@@ -31,10 +31,19 @@ final fireInputProvider =
     StateNotifierProvider<FireInputNotifier, FireGoalInput>((ref) {
   final dashAsync = ref.watch(dashboardProvider);
   final firePlan = dashAsync.valueOrNull?.firePlan;
+  final profile = dashAsync.valueOrNull?.profile;
+
+  // PRIMARY: profile.current_savings (always fresh after profile update)
+  // FALLBACK: firePlan.currentSavings (from onboarding calculation)
+  // LAST RESORT: 200000
+  final currentSavings = (profile != null && (profile['current_savings'] ?? 0) > 0)
+      ? (profile['current_savings'] as num).toDouble()
+      : firePlan?.currentSavings ?? 200000;
+
   return FireInputNotifier(FireGoalInput(
     targetAmount:  firePlan?.targetCorpus  ?? 15200000,
     targetYears:   firePlan?.targetYears   ?? 7,
-    currentSavings: firePlan?.currentSavings ?? 200000,
+    currentSavings: currentSavings,
   ));
 });
 

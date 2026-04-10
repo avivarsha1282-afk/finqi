@@ -125,6 +125,9 @@ class RefreshCountdown extends StateNotifier<int> {
 
 final refreshCountdownProvider = StateNotifierProvider<RefreshCountdown, int>(
   (ref) => RefreshCountdown(30, onRefresh: () {
+    // ONLY refresh non-Gemini data (Yahoo Finance quotes).
+    // Gemini-dependent providers (news, artha, IPO, weekly-brief) are
+    // only refreshed on manual pull-to-refresh and hit backend cache.
     ref.invalidate(marketsOverviewProvider);
     ref.invalidate(marketsMoversProvider);
   }),

@@ -11,6 +11,7 @@ import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../features/onboarding/widgets/onboarding_shared.dart';
 import '../../language/providers/language_provider.dart';
+import '../../../l10n/t.dart';
 
 class EditProfileScreen extends ConsumerStatefulWidget {
   const EditProfileScreen({super.key});
@@ -188,7 +189,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> with Sing
       backgroundColor: AppColors.backgroundColor,
       appBar: AppBar(
         leading: IconButton(icon: const Icon(Icons.arrow_back_rounded), onPressed: () => context.pop()),
-        title: Text(lang == 'hi' ? 'प्रोफ़ाइल संपादित करें' : 'Edit Profile', style: AppTextStyles.subheading),
+        title: Text(t(ref, 'edit_profile'), style: AppTextStyles.subheading),
         actions: [
           TextButton(
             onPressed: _save,
@@ -201,8 +202,8 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> with Sing
           labelColor: AppColors.primaryTeal,
           unselectedLabelColor: AppColors.textTertiary,
           tabs: [
-            Tab(text: lang == 'hi' ? 'व्यक्तिगत' : 'Personal'),
-            Tab(text: lang == 'hi' ? 'वित्तीय' : 'Financial'),
+            Tab(text: t(ref, 'personal')),
+            Tab(text: t(ref, 'financial')),
           ],
         ),
       ),
