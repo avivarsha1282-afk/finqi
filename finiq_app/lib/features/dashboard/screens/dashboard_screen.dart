@@ -78,7 +78,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                '${t(ref, 'home_greeting')}, ${data.userName} 👋',
+                                '${getGreeting(ref)}, ${data.userName} 👋',
                                 style: AppTextStyles.heading2,
                               ),
                               const SizedBox(height: 4),
@@ -199,7 +199,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                       children: [
                         Expanded(
                           child: _quickStat(
-                            'Tax Saving',
+                            t(ref, 'tax_saving'),
                             CurrencyFormatter.compact(data.taxReport.totalPotentialSaving),
                             Icons.receipt_long_rounded,
                             AppColors.warningAmber,
@@ -208,13 +208,18 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                         ),
                         const SizedBox(width: 12),
                         Expanded(
-                          child: _quickStat(
-                            'Monthly SIP',
-                            CurrencyFormatter.compact(data.monthlySipNeeded),
-                            Icons.local_fire_department_rounded,
-                            AppColors.primaryTeal,
-                            () => context.go('/fire'),
-                          ),
+                          child: data.monthlySipNeeded <= 0 && data.goalSavings >= data.goalAmount
+                            ? _quickStatGoalMet(
+                                t(ref, 'monthly_sip'),
+                                () => context.go('/fire'),
+                              )
+                            : _quickStat(
+                                t(ref, 'monthly_sip'),
+                                CurrencyFormatter.compact(data.monthlySipNeeded),
+                                Icons.local_fire_department_rounded,
+                                AppColors.primaryTeal,
+                                () => context.go('/fire'),
+                              ),
                         ),
                       ],
                     ).animate(delay: 200.ms).fadeIn(),
@@ -430,6 +435,31 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             Text(value, style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: color, fontFamily: 'monospace')),
             const SizedBox(height: 4),
             Text(label, style: const TextStyle(fontSize: 11, color: AppColors.textTertiary)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _quickStatGoalMet(String label, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppColors.cardColor,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFF00C896).withOpacity(0.3)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Icon(Icons.check_circle_rounded, color: Color(0xFF00C896), size: 20),
+            const SizedBox(height: 8),
+            const Text('Goal Met! ✓', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Color(0xFF00C896))),
+            const SizedBox(height: 4),
+            Text(label, style: const TextStyle(fontSize: 11, color: AppColors.textTertiary)),
+            const Text('Savings exceed target', style: TextStyle(fontSize: 10, color: Colors.white38)),
           ],
         ),
       ),

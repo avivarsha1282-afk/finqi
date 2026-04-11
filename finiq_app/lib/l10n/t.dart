@@ -20,3 +20,12 @@ String t(WidgetRef ref, String key) {
 String tLang(String lang, String key) {
   return _allStrings[lang]?[key] ?? stringsEn[key] ?? key;
 }
+
+/// Time-based greeting in the user's language.
+/// Returns "Good morning" / "शुभ प्रभात" etc. based on IST time.
+String getGreeting(WidgetRef ref) {
+  final hour = DateTime.now().toLocal().hour;
+  if (hour < 12) return t(ref, 'good_morning');
+  if (hour < 17) return t(ref, 'good_afternoon');
+  return t(ref, 'good_evening');
+}

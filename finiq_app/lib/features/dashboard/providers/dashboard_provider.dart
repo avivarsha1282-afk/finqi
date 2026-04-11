@@ -47,11 +47,13 @@ class DashboardData {
 
 Future<DashboardData> _buildDashboardData(Map<String, dynamic> profile, bool offline) async {
   final firebaseUser = FirebaseAuth.instance.currentUser;
-  
-  // DO NOT overwrite profile with Firestore data — Firestore only has
-  // {onboarding_complete: true}. All financial data lives in SharedPrefs/MongoDB.
-
-  final firstName = (profile['name'] as String?)?.split(' ').first ?? firebaseUser?.displayName?.split(' ').first ?? 'User';
+  // Name priority: profile fullName (MongoDB) > profile name > Firebase displayName > 'User'
+  final rawName = (profile['fullName'] as String?)
+      ?? (profile['full_name'] as String?)
+      ?? (profile['name'] as String?)
+      ?? firebaseUser?.displayName
+      ?? 'User';
+  final firstName = rawName.trim().split(' ').first;
   final realPhoto = firebaseUser?.photoURL;
 
   // Real user data — support BOTH old and new field name formats

@@ -302,4 +302,14 @@ IMPORTANT: Address {name} by name. Reference their specific numbers above.
     print(f"[ARTHA] First 200 chars of prompt: {full_prompt[:200]}")
     print("=" * 50)
 
+    # Route through hybrid LLM engine
+    try:
+        from engines.llm_engine import route_artha_call
+        result = route_artha_call(full_prompt, system='', language=language, max_tokens=400)
+        if result:
+            return result
+        print("[ARTHA] Hybrid engine returned None, falling back to Gemini pool")
+    except Exception as e:
+        print(f"[ARTHA] Hybrid engine error: {e}, falling back to Gemini pool")
+
     return _call_gemini(full_prompt, message)

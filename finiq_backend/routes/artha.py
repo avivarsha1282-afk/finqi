@@ -175,7 +175,16 @@ def send_message(conv_id):
     # Build user context from profile data (merge DB + request)
     db_user = get_user_by_uid(uid)
     db_profile = db_user.get('profile', {}) if db_user else {}
-    user_name = db_user.get('name', 'there') if db_user else 'there'
+    # Name priority: MongoDB profile fullName > top-level name > 'there'
+    user_name = (
+        db_profile.get('fullName') or
+        db_profile.get('full_name') or
+        db_profile.get('name') or
+        (db_user.get('name') if db_user else None) or
+        'there'
+    )
+    if user_name:
+        user_name = user_name.strip().split(' ')[0]
 
     user_context = {
         'name': user_name,

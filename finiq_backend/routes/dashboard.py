@@ -29,11 +29,24 @@ def _fmt(a):
         return '₹0'
 
 
+def _resolve_display_name(user, profile):
+    """Get user's REAL name. Priority: MongoDB profile > Firebase Auth > email."""
+    raw = (
+        profile.get('fullName') or
+        profile.get('full_name') or
+        profile.get('name') or
+        (user.get('name') if user else None) or
+        (user.get('email', '').split('@')[0] if user else 'User')
+    )
+    # Return first name only for greeting
+    return raw.strip().split(' ')[0] if raw else 'User'
+
+
 def generate_gemini_dashboard_brief(user, profile, score, fire, tax):
     """Call Gemini ONCE to generate the complete personalised dashboard JSON.
     Result is saved to MongoDB — never regenerated unless user updates profile.
     """
-    name = (user.get('name', 'User') if user else 'User').split(' ')[0]
+    name = _resolve_display_name(user, profile)
     monthly_income = float(profile.get('monthly_salary', 0))
     monthly_expense = float(profile.get('monthly_expense', 0))
     monthly_savings = max(0, monthly_income - monthly_expense)
@@ -105,8 +118,14 @@ Generate this exact JSON:
 }}"""
 
     try:
-        from engines.gemini_service import _call_gemini
-        response_text = _call_gemini(prompt, prompt)
+        # Try hybrid engine first (Ollama → Groq → Gemini)
+        from engines.llm_engine import call_text_llm
+        response_text = call_text_llm(prompt, system="You are Artha, FinIQ's AI financial mentor.", max_tokens=600)
+        
+        if not response_text:
+            # Fallback to direct Gemini pool
+            from engines.gemini_service import _call_gemini
+            response_text = _call_gemini(prompt, prompt)
 
         # Strip any accidental markdown
         cleaned = response_text.strip()
@@ -186,7 +205,7 @@ def get_dashboard():
         return jsonify({
             'has_profile': False,
             'user': {
-                'name': user.get('name', 'User') if user else 'User',
+                'name': _resolve_display_name(user, profile),
                 'photo_url': user.get('photo_url', '') if user else '',
             }
         }), 200
@@ -225,7 +244,7 @@ def get_dashboard():
     return jsonify({
         'has_profile': True,
         'user': {
-            'name': user.get('name', 'User') if user else 'User',
+            'name': _resolve_display_name(user, profile),
             'photo_url': user.get('photo_url', '') if user else '',
         },
         'profile': profile,
@@ -288,6 +307,23 @@ def update_profile():
                     upsert=True
                 )
             print(f"[PROFILE] Health score recalculated: {new_score.get('total_score')}")
+
+            # Recalculate Tax Report
+            from engines.tax_engine import compare_regimes
+            annual_income = monthly_income * 12
+            new_tax = compare_regimes(
+                income=annual_income,
+                investment_80c=float(profile.get('section_80c', 0)),
+                premium_80d=float(profile.get('premium_80d', 0)),
+                nps_contribution=float(profile.get('nps_contribution', 0)),
+            )
+            if tax_reports_collection is not None:
+                tax_reports_collection.update_one(
+                    {'firebase_uid': uid},
+                    {'$set': {**new_tax, 'firebase_uid': uid, 'annual_income': annual_income}},
+                    upsert=True
+                )
+            print(f"[PROFILE] Tax recalculated: potential_saving={new_tax.get('total_potential_saving')}")
 
         except Exception as e:
             print(f"[PROFILE] Recalc error (non-fatal): {e}")
