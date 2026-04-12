@@ -1,8 +1,9 @@
 import 'dart:convert';
 import 'package:hive_flutter/hive_flutter.dart';
 
-/// Hive-based local cache for dashboard data.
-/// Provides instant loading and offline fallback.
+/// R3: UID-scoped Hive cache for dashboard data.
+/// All keys are prefixed with the current user's UID to prevent
+/// User B from seeing User A's financial data on shared devices.
 class CacheService {
   CacheService._();
 
@@ -10,6 +11,7 @@ class CacheService {
   static const Duration freshDuration = Duration(hours: 24);
 
   static bool _initialized = false;
+  static String _currentUid = '';
 
   /// Initialize Hive. Call once in main().
   static Future<void> init() async {
@@ -21,17 +23,30 @@ class CacheService {
 
   static Box get _box => Hive.box(_boxName);
 
-  // ── Generic cache operations ─────────────────────────────
-
-  /// Save a JSON-serializable map to cache.
-  static Future<void> putJson(String key, Map<String, dynamic> data) async {
-    await _box.put(key, jsonEncode(data));
-    await _box.put('${key}_ts', DateTime.now().millisecondsSinceEpoch);
+  /// Set the current user's UID. Call this on login.
+  /// All subsequent cache operations will be scoped to this UID.
+  static void setCurrentUser(String uid) {
+    _currentUid = uid;
   }
 
-  /// Get a cached JSON map. Returns null if not found.
+  /// Prefix a key with the current UID for isolation.
+  static String _scopedKey(String key) {
+    if (_currentUid.isEmpty) return key;
+    return '${_currentUid}_$key';
+  }
+
+  // ── Generic cache operations ─────────────────────────────
+
+  /// Save a JSON-serializable map to cache (UID-scoped).
+  static Future<void> putJson(String key, Map<String, dynamic> data) async {
+    final scoped = _scopedKey(key);
+    await _box.put(scoped, jsonEncode(data));
+    await _box.put('${scoped}_ts', DateTime.now().millisecondsSinceEpoch);
+  }
+
+  /// Get a cached JSON map (UID-scoped). Returns null if not found.
   static Map<String, dynamic>? getJson(String key) {
-    final raw = _box.get(key) as String?;
+    final raw = _box.get(_scopedKey(key)) as String?;
     if (raw == null) return null;
     try {
       return jsonDecode(raw) as Map<String, dynamic>;
@@ -42,7 +57,7 @@ class CacheService {
 
   /// Check if cache entry is still fresh (within freshDuration).
   static bool isFresh(String key) {
-    final ts = _box.get('${key}_ts') as int?;
+    final ts = _box.get('${_scopedKey(key)}_ts') as int?;
     if (ts == null) return false;
     final cached = DateTime.fromMillisecondsSinceEpoch(ts);
     return DateTime.now().difference(cached) < freshDuration;
@@ -54,15 +69,30 @@ class CacheService {
     return getJson(key);
   }
 
-  /// Delete a specific cache entry.
+  /// Delete a specific cache entry (UID-scoped).
   static Future<void> delete(String key) async {
-    await _box.delete(key);
-    await _box.delete('${key}_ts');
+    final scoped = _scopedKey(key);
+    await _box.delete(scoped);
+    await _box.delete('${scoped}_ts');
   }
 
-  /// Clear all cache.
+  /// Clear all cache for the current user.
+  /// Call this on LOGOUT — before FirebaseAuth.signOut().
+  static Future<void> clearCurrentUserData() async {
+    if (_currentUid.isEmpty) return;
+    final prefix = '${_currentUid}_';
+    final keysToDelete = _box.keys.where(
+        (k) => k.toString().startsWith(prefix)).toList();
+    for (final key in keysToDelete) {
+      await _box.delete(key);
+    }
+    _currentUid = '';
+  }
+
+  /// Clear all cache (nuclear option — for dev/debug).
   static Future<void> clearAll() async {
     await _box.clear();
+    _currentUid = '';
   }
 
   // ── Domain-specific helpers ──────────────────────────────

@@ -46,7 +46,6 @@ from routes.score import score_bp
 from routes.fire import fire_bp
 from routes.tax import tax_bp
 from routes.dashboard import dashboard_bp
-from routes.chat import chat_bp
 
 app.register_blueprint(auth_bp, url_prefix='/api')
 app.register_blueprint(onboarding_bp, url_prefix='/api')
@@ -54,7 +53,6 @@ app.register_blueprint(score_bp, url_prefix='/api')
 app.register_blueprint(fire_bp, url_prefix='/api')
 app.register_blueprint(tax_bp, url_prefix='/api')
 app.register_blueprint(dashboard_bp, url_prefix='/api')
-app.register_blueprint(chat_bp, url_prefix='/api')
 
 # Artha Conversations (Chat History)
 try:

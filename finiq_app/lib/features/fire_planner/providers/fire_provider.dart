@@ -40,9 +40,17 @@ final fireInputProvider =
       ? (profile['current_savings'] as num).toDouble()
       : firePlan?.currentSavings ?? 200000;
 
+  // TIMELINE: profile is authoritative (Edit Profile sets this)
+  // FALLBACK: firePlan value from last calculation
+  // LAST RESORT: 7 years
+  final profileTimeline = profile?['target_timeline'];
+  final targetYears = (profileTimeline != null && (profileTimeline as num).toInt() > 0)
+      ? profileTimeline.toInt()
+      : firePlan?.targetYears ?? 7;
+
   return FireInputNotifier(FireGoalInput(
     targetAmount:  firePlan?.targetCorpus  ?? 15200000,
-    targetYears:   firePlan?.targetYears   ?? 7,
+    targetYears:   targetYears,
     currentSavings: currentSavings,
   ));
 });

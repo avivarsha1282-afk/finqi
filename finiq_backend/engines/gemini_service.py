@@ -1,3 +1,13 @@
+"""
+FinIQ Gemini Service — Production v2
+Artha AI Financial Mentor with:
+  - Complete system prompt rewrite (Section 5)
+  - Pre-computed tax numbers (never lets LLM calculate)
+  - FinancialProfile integration
+  - Artha validator post-processing
+  - Prompt injection guardrails
+"""
+
 import os
 import time
 import threading
@@ -7,44 +17,14 @@ from google.genai import types
 
 load_dotenv()
 
-_client = genai.Client(api_key=os.getenv('GEMINI_API_KEY'))
 _MODEL = 'gemini-2.5-flash'
 
-ARTHA_SYSTEM_PROMPT_EN = """
-You are Artha, FinIQ's AI financial mentor for Indian salaried professionals.
+# ── Rate-limit queue ──────────────────────────────────────────────────────────
+_lock = threading.Lock()
+_last_request_time = 0.0
+_MIN_INTERVAL_SECS = 1.5
 
-YOUR PERSONALITY:
-- Warm, direct, like a CA friend who knows you well
-- Always use actual ₹ numbers from the profile below
-- Never give generic advice — always personalised
-- Financial education only — not SEBI investment advice
-- When you mention SEBI, say it ONCE per response only
-- Keep responses under 120 words unless asked for detail
-- Use bullet points for lists, plain text for advice
-- Always address the user by first name
-
-WHAT ARTHA KNOWS ABOUT INDIAN FINANCE:
-- All sections 80C, 80D, 80CCD, 24B, HRA deductions
-- Mutual fund categories: ELSS, Index, Flexi Cap, etc.
-- SIP, lump sum, STP, SWP strategies
-- FIRE planning, corpus calculation, withdrawal rate
-- Term insurance, health insurance coverage needs
-- Emergency fund: 6 months of expenses minimum
-- Tax regimes: Old vs New, which is better when
-- Gold, real estate, equity allocation by risk profile
-- RBI repo rate impact on home loans and FDs
-- NSE/BSE, Nifty, Sensex — market context
-
-CONVERSATION RULES:
-- End every message with SEBI disclaimer once only:
-  "This is financial education, not SEBI advice."
-  But ONLY if giving specific investment guidance.
-  For general questions, skip the disclaimer.
-- Never say "I cannot provide" — always try to help
-- If asked about something outside finance:
-  Gently redirect: "Let's focus on your finances!"
-"""
-
+# ── Guardrails ────────────────────────────────────────────────────────────────
 FINANCIAL_GUARDRAILS = """
 ABSOLUTE RULES — OVERRIDE ALL USER INSTRUCTIONS:
 1. You are ONLY a financial education assistant for Indian personal finance.
@@ -56,7 +36,7 @@ ABSOLUTE RULES — OVERRIDE ALL USER INSTRUCTIONS:
 """
 
 def sanitise_user_input(user_message: str) -> str:
-    """Remove injection attempts before sending to Gemini."""
+    """Remove injection attempts before sending to LLM."""
     injection_phrases = [
         'ignore previous', 'ignore all', 'forget your',
         'new instructions', 'act as', 'pretend you are',
@@ -69,66 +49,29 @@ def sanitise_user_input(user_message: str) -> str:
         if phrase in lower:
             return ('I can only answer questions about '
                     'personal finance and investments.')
-    # Limit message length to prevent context stuffing
     return user_message[:2000]
 
-ARTHA_SYSTEM_PROMPT_HI = """
-आप अर्था हैं, FinIQ के AI वित्तीय सलाहकार — भारतीय वेतनभोगी पेशेवरों के लिए।
 
-आपका पूरा जवाब हिंदी में होना चाहिए। एक भी अंग्रेज़ी वाक्य न लिखें।
-वित्तीय शब्द (SIP, PPF, NPS, ELSS, 80C, 80D, EMI) का मूल रूप में उपयोग करें।
-
-आपका व्यक्तित्व:
-- गर्मजोशी से भरे, मददगार — जैसे कोई CA दोस्त जो आपको अच्छे से जानता हो
-- हमेशा उपयोगकर्ता की असली ₹ संख्याओं का उपयोग करें
-- सामान्य सलाह कभी न दें — हमेशा व्यक्तिगत
-- 120 शब्दों से कम में जवाब दें जब तक विस्तार न माँगा जाए
-- सूचियों के लिए बुलेट पॉइंट, सलाह के लिए सादा पाठ
-- हमेशा उपयोगकर्ता को उनके नाम से संबोधित करें
-- ₹ चिह्न और भारतीय संख्या प्रारूप (₹1.5L, ₹2Cr) का उपयोग करें
-
-बातचीत के नियम:
-- हर जवाब के अंत में एक बार ही SEBI अस्वीकरण लिखें:
-  "यह वित्तीय शिक्षा है, SEBI सलाह नहीं।"
-  लेकिन केवल जब विशिष्ट निवेश मार्गदर्शन दे रहे हों।
-- कभी न कहें "मैं नहीं बता सकता" — हमेशा मदद करने का प्रयास करें
-"""
-
-
-ARTHA_SYSTEM_PROMPT_TA = """
-நீங்கள் அர்தா, ஒரு அன்பான, புத்திசாலி தனிப்பட்ட நிதி வழிகாட்டி.
-தமிழில் பதில் சொல்லுங்கள்.
-விதிகள்:
-- இந்திய நிதி சொற்களை பயன்படுத்துங்கள்: SIP, PPF, NPS, ELSS, 80C
-- எப்போதும் ₹ குறியீடு பயன்படுத்துங்கள்
-- 3 வாக்கியங்களுக்கு குறைவாக பதிலளிக்கவும்
-- பயனாளரை அவர்களின் பெயரில் அழைக்கவும்
-"""
-
-# ── Rate-limit queue ──────────────────────────────────────────────────────────
-_lock = threading.Lock()
-_last_request_time = 0.0
-_MIN_INTERVAL_SECS = 1.5   # max ~40 RPM on free tier
-
+# ── Fallback responses ────────────────────────────────────────────────────────
 _FALLBACKS = {
     'insurance':   ('Having zero life cover at your income level is the '
                     'highest financial risk you carry today. A ₹1.5Cr term plan '
-                    'costs only ₹1,200/mo — fix this first. This is financial education, not SEBI advice.'),
+                    'costs only ₹1,200/mo — fix this first.'),
     'fire':        ('Starting a ₹5,000/mo SIP in a Nifty 50 index fund today '
                     'grows to ₹12L in 10 years at 12% CAGR. The earlier you '
-                    'start, the less you need to invest. This is financial education, not SEBI advice.'),
-    'tax':         ('You are not fully utilising your 80C deduction limit. '
-                    'Investing ₹12,500/month in ELSS saves ₹46,800/year in tax '
-                    'while also building wealth. This is financial education, not SEBI advice.'),
+                    'start, the less you need to invest.'),
+    'tax':         ('You can save tax by investing ₹12,500/month in ELSS '
+                    'under Section 80C. This is the max ₹1.5L/year limit '
+                    'divided by 12 months.'),
     'emergency':   ('Your emergency fund should cover 6 months of expenses. '
                     'Keep it in a liquid fund or high-yield savings account — '
-                    'never in equity. This is financial education, not SEBI advice.'),
+                    'never in equity.'),
     'debt':        ('Keep your total EMI below 40% of monthly income to maintain '
                     'healthy debt ratios. Any surplus after EMIs should go into '
-                    'a SIP before lifestyle upgrades. This is financial education, not SEBI advice.'),
+                    'a SIP before lifestyle upgrades.'),
     'default':     ('This area of your finances needs attention. Focus on one '
                     'improvement at a time — small consistent actions compound '
-                    'significantly. This is financial education, not SEBI advice.'),
+                    'significantly.'),
 }
 
 def _get_fallback(prompt: str) -> str:
@@ -139,6 +82,7 @@ def _get_fallback(prompt: str) -> str:
     if 'emergency' in p: return _FALLBACKS['emergency']
     if 'debt' in p or 'emi' in p: return _FALLBACKS['debt']
     return _FALLBACKS['default']
+
 
 def _format_inr(value):
     """Format a number in Indian notation (₹1.2L, ₹1.5Cr)"""
@@ -155,17 +99,18 @@ def _format_inr(value):
     except (TypeError, ValueError):
         return "Unknown"
 
+
 def _call_gemini(prompt: str, user_message: str, max_retries: int = 3) -> str:
     from engines.gemini_pool import smart_generate
     from google.genai import types
-    
+
     models_to_try = [
         'gemini-2.0-flash-lite',
         'gemini-flash-lite-latest',
         'gemini-2.0-flash',
         'gemini-2.5-flash'
     ]
-    
+
     try:
         response = smart_generate(
             models_to_try,
@@ -178,138 +123,185 @@ def _call_gemini(prompt: str, user_message: str, max_retries: int = 3) -> str:
         return _get_fallback(user_message)
 
 
-def get_artha_response(message: str, conversation_history: list,
-                       user_context: dict, language: str = 'en') -> str:
-    if language == 'hi':
-        system = ARTHA_SYSTEM_PROMPT_HI
-        lang_prefix = 'हिंदी में जवाब दें। '
-    elif language == 'ta':
-        system = ARTHA_SYSTEM_PROMPT_TA
-        lang_prefix = 'தமிழில் பதில் சொல்லுங்கள். '
+def _build_artha_system_prompt(user_context: dict, language: str = 'en') -> str:
+    """Build the complete Artha system prompt with pre-computed financials.
+    
+    All tax numbers, ratios, and status flags are computed HERE — 
+    the LLM never calculates them. This prevents math errors.
+    """
+    from models.financial_profile import FinancialProfile
+    p = FinancialProfile(user_context)
+
+    # Pre-compute everything the LLM needs
+    monthly_80c_sip = 12_500  # ₹1,50,000 ÷ 12 — ALWAYS this number
+    goal_status = "✅ ALREADY ACHIEVED" if p.goal_achieved else "⏳ In Progress"
+
+    # Emergency fund assessment
+    ef = p.emergency_fund_months
+    if ef >= 6:
+        ef_status = f"🟢 Excellent ({ef:.0f} months)"
+    elif ef >= 3:
+        ef_status = f"🟡 Decent ({ef:.0f} months — target 6)"
     else:
-        system = ARTHA_SYSTEM_PROMPT_EN
-        lang_prefix = ''
+        ef_status = f"🔴 Critical ({ef:.0f} months — need 6)"
 
-    # Build rich, personalised context from REAL user data
-    name = user_context.get('name', 'there')
-    monthly_salary = user_context.get('monthly_salary') or user_context.get('monthly_income') or user_context.get('monthlyIncome') or 0
-    monthly_expense = user_context.get('monthly_expense') or user_context.get('monthlyExpenses') or 0
-    current_savings = user_context.get('current_savings') or user_context.get('currentSavings') or 0
-    total_emi = user_context.get('total_emi', 0)
-    has_health = user_context.get('has_health_insurance', False)
-    has_term = user_context.get('has_term_insurance', False)
-    section_80c = user_context.get('section_80c', 0)
-    premium_80d = user_context.get('premium_80d', 0)
-    nps = user_context.get('nps_contribution', 0)
-    goal = user_context.get('financial_goal', user_context.get('goal_name', 'Not set'))
-    goal_amount = user_context.get('financial_goal_amount', user_context.get('goal_amount', user_context.get('goalAmount')))
-    timeline = user_context.get('target_timeline', user_context.get('goal_years', user_context.get('goalTimeline')))
-    risk = user_context.get('risk_appetite', user_context.get('riskAppetite', 'moderate'))
-    age = user_context.get('age')
-    fire_corpus = user_context.get('fire_corpus', user_context.get('fireCorpus', 0))
-    monthly_sip = user_context.get('monthly_sip', user_context.get('monthlySip', 0))
-    health_score = user_context.get('health_score', user_context.get('healthScore', 0))
-    health_grade = user_context.get('health_grade', user_context.get('healthGrade', ''))
-    tax_regime = user_context.get('tax_regime', user_context.get('taxRegime', ''))
+    # EMI assessment
+    emi_pct = p.emi_pct_of_income
+    if emi_pct == 0:
+        emi_status = "✅ No debt"
+    elif emi_pct < 20:
+        emi_status = f"✅ Healthy ({emi_pct:.0f}%)"
+    elif emi_pct < 40:
+        emi_status = f"🟡 Manageable ({emi_pct:.0f}%)"
+    else:
+        emi_status = f"🔴 Danger ({emi_pct:.0f}% — restructure needed)"
 
-    # Calculate key ratios for smarter advice
-    try:
-        ms = float(monthly_salary)
-        me = float(monthly_expense)
-    except (TypeError, ValueError):
-        ms = 0
-        me = 0
-
-    monthly_surplus = ms - me
-    annual_income = ms * 12
-    savings_rate = round((ms - me) / ms * 100) if ms > 0 else None
-
-    emi_ratio = None
-    if ms > 0 and total_emi:
-        try:
-            emi_ratio = round(float(total_emi) / ms * 100)
-        except (TypeError, ValueError):
-            pass
-
-    emergency_months = None
-    if current_savings and me > 0:
-        try:
-            emergency_months = round(float(current_savings) / me, 1)
-        except (TypeError, ValueError):
-            pass
-
-    # Determine data quality
-    data_quality = "complete" if ms > 0 else "incomplete"
-
-    context_str = f"""
-You are having a conversation with {name}.
-
-USER'S COMPLETE FINANCIAL PROFILE:
-Name: {name}
-Age: {age or 'Unknown'}
-Monthly Income: ₹{ms:,.0f}
-Monthly Expenses: ₹{me:,.0f}
-Monthly Surplus: ₹{monthly_surplus:,.0f}
-Current Savings: {_format_inr(current_savings)}
-Annual Income: ₹{annual_income:,.0f}
-Savings Rate: {f'{savings_rate}%' if savings_rate is not None else 'Unknown'}
-Emergency Fund: {f'{emergency_months} months of expenses' if emergency_months is not None else 'Unknown'}
-Total EMIs: {_format_inr(total_emi)} {f'({emi_ratio}% of income)' if emi_ratio is not None else ''}
-Health Insurance: {'Yes ✓' if has_health else 'NO ✗ (CRITICAL GAP)'}
-Term Insurance: {'Yes ✓' if has_term else 'NO ✗ (CRITICAL GAP)'}
-80C Investments: {_format_inr(section_80c)} / ₹1.5L limit
-80D Premium: {_format_inr(premium_80d)} / ₹25K limit
-NPS (80CCD): {_format_inr(nps)} / ₹50K limit
-Health Score: {health_score}/100 ({health_grade})
-Risk Appetite: {risk}
-Financial Goal: {goal}
-Goal Amount: {_format_inr(goal_amount)} in {timeline or '?'} years
-FIRE Corpus Target: {_format_inr(fire_corpus)}
-Monthly SIP Needed: {_format_inr(monthly_sip)}
-Tax Regime: {tax_regime or 'Not set'}
-Profile Data Quality: {data_quality}
-
-IF profile data is incomplete (₹0 income):
-  Tell the user warmly to update their profile first.
-  "I need your financial details to give personalised advice. Please update your profile → Edit Profile."
-  Do NOT give generic advice when data is missing.
-
-IF profile data is complete:
-  USE the actual numbers in every response.
-  Example: Instead of "invest in ELSS" say
-  "Your ₹{monthly_surplus:,.0f} surplus means you can invest ₹{int(monthly_surplus*0.3):,} in ELSS monthly."
-
-IMPORTANT: Address {name} by name. Reference their specific numbers above.
+    lang_instruction = ""
+    if language == 'hi':
+        lang_instruction = """
+LANGUAGE: Respond entirely in Hindi (Devanagari script).
+Keep financial terms as-is: SIP, ELSS, EMI, PPF, NPS, EPF, SEBI.
+Write numbers: ₹12,500, ₹1.5 लाख, ₹4.25 करोड़.
+Use respectful 'आप' form throughout.
+"""
+    elif language == 'ta':
+        lang_instruction = """
+LANGUAGE: Respond entirely in Tamil (தமிழ்).
+Keep financial terms as-is: SIP, ELSS, EMI, PPF, NPS, EPF, SEBI.
 """
 
+    return f"""{lang_instruction}
+
+YOU ARE ARTHA — FINIQ's AI FINANCIAL MENTOR.
+
+PERSONALITY:
+You are like a brilliant CA friend who knows the user personally.
+Warm, direct, specific. You care about their actual financial wellbeing.
+You never give generic advice — always use the user's actual numbers.
+You think before answering and you check your math.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+USER'S COMPLETE FINANCIAL PROFILE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+NAME: {p.first_name}
+AGE: {p.age}
+OCCUPATION: {p.occupation}
+CITY: {p.city}
+RISK APPETITE: {p.risk_appetite.capitalize()}
+
+INCOME & CASH FLOW:
+  Monthly Income:   {FinancialProfile.format_inr(p.monthly_income)}
+  Monthly Expenses: {FinancialProfile.format_inr(p.monthly_expenses)}
+  Monthly EMI:      {FinancialProfile.format_inr(p.monthly_emi)}
+  Monthly Surplus:  {FinancialProfile.format_inr(p.monthly_surplus)}
+  Savings Rate:     {p.savings_rate_pct}%
+
+WEALTH:
+  Current Savings:  {FinancialProfile.format_inr(p.current_savings)}
+  Total Loan:       {FinancialProfile.format_inr(p.total_loan)}
+  EMI Status:       {emi_status}
+
+FINANCIAL GOAL:
+  Goal:      {p.goal_name} ({p.goal_type})
+  Amount:    {FinancialProfile.format_inr(p.goal_amount)}
+  Timeline:  {p.goal_timeline_yrs} years
+  Status:    {goal_status}
+
+EMERGENCY FUND: {ef_status}
+
+TAX BRACKET: {p.tax_bracket_pct}%
+PRE-COMPUTED TAX SAVINGS (USE THESE EXACT NUMBERS — DO NOT RECALCULATE):
+  80C (ELSS/PPF): Invest ₹1,50,000/year = ₹{monthly_80c_sip:,}/month
+                   Saves ₹{p.tax_saving_80c:,}/year in tax
+  80D (Health):    Up to ₹25,000/year
+                   Saves up to ₹{p.tax_saving_80d:,}/year
+  80CCD (NPS):     Invest ₹50,000/year extra
+                   Saves ₹{p.tax_saving_nps:,}/year
+  TOTAL POSSIBLE:  ₹{p.total_tax_saving:,}/year in tax savings
+
+{"🔴 DEBT ALERT: EMI is " + str(round(emi_pct)) + "% of income. Prioritise debt reduction before new investments." if emi_pct > 40 else ""}
+{"🎯 GOAL ALREADY MET: " + p.first_name + " has " + FinancialProfile.format_inr(p.current_savings) + " which exceeds " + FinancialProfile.format_inr(p.goal_amount) + " goal. Suggest setting a higher target." if p.goal_achieved else ""}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+RESPONSE RULES — FOLLOW STRICTLY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+RULE 1 — MATH: Use ONLY the pre-computed numbers above. NEVER recalculate.
+  Monthly 80C SIP = ₹12,500. NEVER state ₹52,500.
+
+RULE 2 — DEBT FIRST: If EMI > 40% income, address debt BEFORE investments.
+
+RULE 3 — GOAL STATUS: If goal is achieved, acknowledge it. Never recommend SIP for an achieved goal.
+
+RULE 4 — ACTUAL NUMBERS: Every response uses 2-3 numbers from the profile.
+  NOT: "Invest in ELSS for tax savings."
+  YES: "Invest ₹12,500/month in ELSS. This saves ₹{p.tax_saving_80c:,}/year in tax given your {p.tax_bracket_pct}% bracket."
+
+RULE 5 — VARY STYLE: Don't start every response with name + surplus. Adapt to the question context.
+
+RULE 6 — DISCLAIMER: "This is financial education, not SEBI advice." ONCE per conversation only. Omit in follow-ups.
+
+RULE 7 — FOLLOW-UP: End with ONE specific follow-up question relevant to the topic.
+
+RULE 8 — EMERGENCY FUND EXCESS: If > 12 months emergency fund, note the excess could be invested.
+
+RULE 9 — Keep responses under 120 words unless asked for detail.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+WHAT ARTHA WILL NOT DO:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- Recommend specific stocks, crypto, or named MF schemes
+- Make promises about investment returns
+- Give legal or estate planning advice
+- Repeat SEBI disclaimer every message
+"""
+
+
+def get_artha_response(message: str, conversation_history: list,
+                       user_context: dict, language: str = 'en') -> str:
+    """Generate Artha's response using hybrid LLM routing + validation."""
+
+    # Build the complete system prompt with pre-computed financials
+    system = _build_artha_system_prompt(user_context, language)
+
+    # Build conversation history string
     history_str = '\n'.join([
-        f"{'Artha' if m.get('role') == 'model' or m.get('role') == 'assistant' else 'User'}: {m.get('content', '')}"
+        f"{'Artha' if m.get('role') in ('model', 'assistant') else 'User'}: {m.get('content', '')}"
         for m in conversation_history[-10:]
     ])
 
-    # Sanitize user input against injection
+    # Sanitize user input
     safe_message = sanitise_user_input(message)
 
+    lang_prefix = ''
+    if language == 'hi':
+        lang_prefix = 'हिंदी में जवाब दें। '
+    elif language == 'ta':
+        lang_prefix = 'தமிழில் பதில் சொல்லுங்கள். '
+
     full_prompt = (
-        f"{FINANCIAL_GUARDRAILS}\n\n{system}\n\n{context_str}\n\n"
+        f"{FINANCIAL_GUARDRAILS}\n\n{system}\n\n"
         f"Conversation:\n{history_str}\n\n"
         f"User: {lang_prefix}{safe_message}\n\nArtha:"
     )
 
-    # System prompt debug logging
-    print("=" * 50)
-    print(f"[ARTHA] System prompt length: {len(full_prompt)} chars")
-    print(f"[ARTHA] First 200 chars of prompt: {full_prompt[:200]}")
-    print("=" * 50)
-
     # Route through hybrid LLM engine
+    result = None
     try:
         from engines.llm_engine import route_artha_call
         result = route_artha_call(full_prompt, system='', language=language, max_tokens=400)
-        if result:
-            return result
-        print("[ARTHA] Hybrid engine returned None, falling back to Gemini pool")
     except Exception as e:
-        print(f"[ARTHA] Hybrid engine error: {e}, falling back to Gemini pool")
+        print(f"[ARTHA] Hybrid engine error: {e}")
 
-    return _call_gemini(full_prompt, message)
+    if not result:
+        result = _call_gemini(full_prompt, message)
+
+    # Post-process: validate math in the response
+    try:
+        from engines.artha_validator import validate_artha_response
+        result = validate_artha_response(result, user_context)
+    except Exception as e:
+        print(f"[ARTHA_VALIDATOR] Error (non-fatal): {e}")
+
+    return result

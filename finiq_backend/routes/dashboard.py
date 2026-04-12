@@ -18,15 +18,12 @@ def _uid_from_request():
 
 
 def _fmt(a):
-    """Format a number in Indian notation (₹1.2L, ₹1.5Cr)."""
+    """Format a number in Indian notation using the single source of truth."""
+    from models.financial_profile import FinancialProfile
     try:
-        a = abs(float(a or 0))
-        if a >= 10_000_000: return f'₹{a/10_000_000:.1f}Cr'
-        if a >= 100_000: return f'₹{a/100_000:.1f}L'
-        if a >= 1_000: return f'₹{a/1_000:.0f}K'
-        return f'₹{int(a)}'
+        return FinancialProfile.format_inr(float(a or 0))
     except (TypeError, ValueError):
-        return '₹0'
+        return '\u20B90'
 
 
 def _resolve_display_name(user, profile):
@@ -152,8 +149,8 @@ def _fallback_brief(name, score, grade, goal, tax_saving,
     # Insurance gap is the most critical
     if not has_health and not has_term:
         brief = (f'{name}, your score of {score} ({grade}) shows critical gaps. '
-                 f'Zero insurance coverage is your biggest risk — a ₹1Cr term plan '
-                 f'costs just ₹800/mo. Fix this first to boost your score by 20 points.')
+                 f'Zero insurance coverage is your biggest risk \u2014 a \u20b91Cr term plan '
+                 f'costs just \u20b9800/mo. Fix this first to boost your score by 20 points.')
     elif monthly_income > 0 and current_savings < monthly_expense * 3:
         months = round(current_savings / max(monthly_expense, 1), 1)
         brief = (f'{name}, your emergency fund covers only {months} months. '
@@ -220,12 +217,24 @@ def get_dashboard():
         {'firebase_uid': uid}, {'_id': 0},
     ) if tax_reports_collection is not None else None
 
-    # ── Gemini Dashboard Brief (cached in MongoDB) ─────────────────────────
-    gemini_dashboard = user.get('gemini_dashboard') if user else None
+    # ── Gemini Dashboard Brief (cached in MongoDB with TTL) ──────────────────
+    gemini_dashboard = None
     force_refresh = request.args.get('refresh') == 'true'
 
-    if gemini_dashboard is None or force_refresh:
-        # Generate via Gemini and cache it
+    if not force_refresh and user:
+        cached_brief = user.get('gemini_dashboard')
+        cached_at = user.get('dashboard_generated_at')
+        if cached_brief and cached_at:
+            from datetime import timedelta
+            age = datetime.utcnow() - cached_at
+            if age < timedelta(days=7):
+                gemini_dashboard = cached_brief  # Cache is fresh
+            else:
+                print(f'[DASHBOARD] Brief expired for {uid} '
+                      f'(age: {age.total_seconds()/3600:.0f}h). Regenerating.')
+
+    if gemini_dashboard is None:
+        # Generate fresh brief via Gemini and cache it
         gemini_dashboard = generate_gemini_dashboard_brief(user, profile, score, fire, tax)
         try:
             if users_collection is not None:
@@ -266,10 +275,19 @@ def update_profile():
 
     from models.user_model import update_user_fields
     data = request.json or {}
-    allowed = {'name', 'profile'}
-    filtered = {k: v for k, v in data.items() if k in allowed}
-    if filtered:
-        update_user_fields(uid, filtered)
+    # Build $set with dot notation for nested profile fields
+    # This prevents overwriting the entire profile object
+    update_doc = {}
+    if 'name' in data:
+        update_doc['name'] = data['name']
+    if 'profile' in data and isinstance(data['profile'], dict):
+        for k, v in data['profile'].items():
+            update_doc[f'profile.{k}'] = v
+    # Also accept top-level fullName
+    if 'fullName' in data:
+        update_doc['profile.fullName'] = data['fullName']
+    if update_doc:
+        update_user_fields(uid, update_doc)
 
         # ── Recalculate FIRE + Health Score with fresh data ──
         try:

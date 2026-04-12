@@ -1,7 +1,12 @@
 import 'package:intl/intl.dart';
 
+/// Indian number formatting utility.
+/// Uses explicit \u20B9 (U+20B9 INDIAN RUPEE SIGN) everywhere
+/// to prevent font/encoding issues on certain Android devices.
 class IndianNumberFormat {
   IndianNumberFormat._();
+
+  static const String _rupee = '\u20B9';
 
   static final _inrFormat = NumberFormat('#,##,##0', 'en_IN');
   static final _inrDecFormat = NumberFormat('#,##,##0.00', 'en_IN');
@@ -10,13 +15,13 @@ class IndianNumberFormat {
   static String formatRupee(double amount, {bool showDecimals = false}) {
     final abs = amount.abs();
     final prefix = amount < 0 ? '-' : '';
-    if (showDecimals) return '$prefix₹${_inrDecFormat.format(abs)}';
-    return '$prefix₹${_inrFormat.format(abs)}';
+    if (showDecimals) return '$prefix$_rupee${_inrDecFormat.format(abs)}';
+    return '$prefix$_rupee${_inrFormat.format(abs)}';
   }
 
   /// Format with Indian shorthand: L (lakhs), Cr (crores)
   static String formatCompact(double amount) {
-    if (amount == 0) return '₹0';
+    if (amount == 0) return '${_rupee}0';
     final prefix = amount < 0 ? '-' : '';
     final abs = amount.abs();
 
@@ -27,9 +32,9 @@ class IndianNumberFormat {
       return s;
     }
 
-    if (abs >= 10000000) return '$prefix₹${cleanValue(abs / 10000000)}Cr';
-    if (abs >= 100000) return '$prefix₹${cleanValue(abs / 100000)}L';
-    if (abs >= 1000) return '$prefix₹${cleanValue(abs / 1000)}K';
+    if (abs >= 10000000) return '$prefix$_rupee${cleanValue(abs / 10000000)}Cr';
+    if (abs >= 100000) return '$prefix$_rupee${cleanValue(abs / 100000)}L';
+    if (abs >= 1000) return '$prefix$_rupee${cleanValue(abs / 1000)}K';
     
     return formatRupee(amount);
   }
@@ -42,7 +47,7 @@ class IndianNumberFormat {
   /// Parse a plain indian-formatted string to double
   static double? parse(String value) {
     try {
-      final cleaned = value.replaceAll(',', '').replaceAll('₹', '').trim();
+      final cleaned = value.replaceAll(',', '').replaceAll(_rupee, '').trim();
       return double.tryParse(cleaned);
     } catch (_) {
       return null;

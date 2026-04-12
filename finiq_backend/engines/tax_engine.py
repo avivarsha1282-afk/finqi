@@ -72,6 +72,13 @@ def compare_regimes(income, investment_80c=0, premium_80d=0,
         recommended = 'new'
         saving = old_tax - new_tax
     
+    # Calculate ACTUAL marginal rate based on user's income slab (Old Regime)
+    # This determines the real tax saving per rupee of deduction
+    if income <= 250000:     marginal_rate = 0.0
+    elif income <= 500000:   marginal_rate = 0.052   # 5% + 4% cess
+    elif income <= 1000000:  marginal_rate = 0.208   # 20% + 4% cess
+    else:                    marginal_rate = 0.312   # 30% + 4% cess
+
     missed_deductions = []
     if investment_80c < 150000:
         potential = min(150000 - investment_80c, 150000)
@@ -79,21 +86,23 @@ def compare_regimes(income, investment_80c=0, premium_80d=0,
             'section': '80C',
             'description': 'ELSS, PPF, LIC',
             'potential_deduction': potential,
-            'tax_saving': round(potential * 0.312)
+            'tax_saving': round(potential * marginal_rate)
         })
     if premium_80d < 25000:
+        gap = 25000 - premium_80d
         missed_deductions.append({
             'section': '80D',
             'description': 'Health Insurance Premium',
-            'potential_deduction': 25000 - premium_80d,
-            'tax_saving': round((25000 - premium_80d) * 0.312)
+            'potential_deduction': gap,
+            'tax_saving': round(gap * marginal_rate)
         })
     if nps_contribution < 50000:
+        gap = 50000 - nps_contribution
         missed_deductions.append({
             'section': '80CCD(1B)',
             'description': 'NPS Contribution',
-            'potential_deduction': 50000 - nps_contribution,
-            'tax_saving': round((50000 - nps_contribution) * 0.312)
+            'potential_deduction': gap,
+            'tax_saving': round(gap * marginal_rate)
         })
     
     total_potential_saving = sum(d['tax_saving'] 

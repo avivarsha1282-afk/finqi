@@ -120,6 +120,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     _summaryRow('Annual Income', CurrencyFormatter.compact((_profile['annual_income'] ?? 0).toDouble()), Icons.account_balance_wallet_rounded),
                     _summaryRow('Monthly Expenses', CurrencyFormatter.compact((_profile['monthly_expense'] ?? 0).toDouble()), Icons.shopping_cart_rounded),
                     _summaryRow('Current Savings', CurrencyFormatter.compact((_profile['current_savings'] ?? 0).toDouble()), Icons.savings_rounded),
+                    if ((_profile['monthly_emi'] ?? 0).toDouble() > 0)
+                      _summaryRow('Monthly EMI', CurrencyFormatter.compact((_profile['monthly_emi'] ?? 0).toDouble()), Icons.credit_card_rounded),
+                    if ((_profile['total_loan'] ?? 0).toDouble() > 0)
+                      _summaryRow('Total Loan', CurrencyFormatter.compact((_profile['total_loan'] ?? 0).toDouble()), Icons.account_balance_rounded),
                     _summaryRow('Risk Appetite', _profile['risk_appetite'] ?? 'Moderate', Icons.speed_rounded),
                     _summaryRow('Goal', _profile['goal_type'] ?? 'Build Wealth', Icons.flag_rounded),
                   ],

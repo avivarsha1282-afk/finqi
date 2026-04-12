@@ -1,15 +1,25 @@
 """
 Artha Conversation Management — ChatGPT-style history
+Production v2 — Security hardened.
+
+Fixes applied:
+  R1: Messages capped at 50 per conversation ($slice -50)
+  R5: list_conversations uses aggregation (no N+1)
+  R6: Per-user rate limiting (10/min, 100/day)
+  R7: Message length capped at 2000 chars
+
 Endpoints:
-  POST   /artha/conversations          — create new conversation
-  GET    /artha/conversations           — list conversations for a user
-  GET    /artha/conversations/<id>/messages — get messages
-  POST   /artha/conversations/<id>/messages — send message + get Artha response
-  DELETE /artha/conversations/<id>      — delete conversation
+  POST   /artha/conversations               — create new conversation
+  GET    /artha/conversations               — list conversations for a user
+  GET    /artha/conversations/<id>/messages  — get messages
+  POST   /artha/conversations/<id>/messages  — send message + get Artha response
+  DELETE /artha/conversations/<id>           — delete conversation
 """
 
 import uuid
+import time
 from datetime import datetime
+from collections import defaultdict
 from flask import Blueprint, request, jsonify
 from models.firebase import verify_token
 from models.database import artha_conversations_collection
@@ -18,7 +28,51 @@ from engines.gemini_service import get_artha_response
 
 artha_bp = Blueprint('artha', __name__)
 
+# ═══════════════════════════════════════════════════════════
+# Constants
+# ═══════════════════════════════════════════════════════════
+MAX_MESSAGES_PER_CONVERSATION = 50   # R1: Hard cap per conversation
+MAX_MESSAGE_LENGTH = 2000            # R7: Characters per message
+RATE_LIMIT_WINDOW_SECONDS = 60       # R6: 1-minute window
+RATE_LIMIT_MAX_PER_MINUTE = 10       # R6: 10 messages per minute
+RATE_LIMIT_MAX_PER_DAY = 100         # R6: 100 messages per day
 
+
+# ═══════════════════════════════════════════════════════════
+# R6: Per-user rate limiting (in-memory)
+# ═══════════════════════════════════════════════════════════
+_artha_request_log: dict = defaultdict(list)
+
+
+def _check_rate_limit(uid: str):
+    """Check per-user rate limit. Returns (allowed: bool, error_msg: str)."""
+    now = time.time()
+    user_log = _artha_request_log[uid]
+
+    # Clean entries older than 24 hours
+    cutoff_24h = now - 86400
+    _artha_request_log[uid] = [t for t in user_log if t > cutoff_24h]
+    user_log = _artha_request_log[uid]
+
+    # Daily limit
+    if len(user_log) >= RATE_LIMIT_MAX_PER_DAY:
+        return False, (f'You\'ve reached your daily limit of '
+                       f'{RATE_LIMIT_MAX_PER_DAY} messages. Resets in 24 hours.')
+
+    # Per-minute limit
+    cutoff_1min = now - RATE_LIMIT_WINDOW_SECONDS
+    recent = [t for t in user_log if t > cutoff_1min]
+    if len(recent) >= RATE_LIMIT_MAX_PER_MINUTE:
+        return False, 'Please wait a moment before sending another message.'
+
+    # Allowed — record this request
+    _artha_request_log[uid].append(now)
+    return True, ''
+
+
+# ═══════════════════════════════════════════════════════════
+# Auth helper
+# ═══════════════════════════════════════════════════════════
 def _auth(req):
     """Verify Firebase token and return uid or None."""
     auth_header = req.headers.get('Authorization')
@@ -46,6 +100,8 @@ def create_conversation():
         'userId': uid,
         'title': 'New Chat',
         'messages': [],
+        'messageCount': 0,                        # R1: Track count separately
+        'maxMessages': MAX_MESSAGES_PER_CONVERSATION,  # R1: Self-documenting limit
         'createdAt': datetime.utcnow(),
         'updatedAt': datetime.utcnow(),
     }
@@ -60,6 +116,7 @@ def create_conversation():
 
 # ═══════════════════════════════════════════════════════════
 # GET /artha/conversations — List conversations for user
+# R5: Single aggregation query (replaces N+1 pattern)
 # ═══════════════════════════════════════════════════════════
 
 @artha_bp.route('/artha/conversations', methods=['GET'])
@@ -71,33 +128,42 @@ def list_conversations():
     if artha_conversations_collection is None:
         return jsonify({'conversations': []}), 200
 
-    limit = int(request.args.get('limit', 20))
-    cursor = artha_conversations_collection.find(
-        {'userId': uid},
-        {'_id': 0, 'conversationId': 1, 'title': 1,
-         'createdAt': 1, 'updatedAt': 1, 'messages': {'$slice': -1}}
-    ).sort('updatedAt', -1).limit(limit)
+    limit = min(int(request.args.get('limit', 20)), 50)
+
+    # R5: Single aggregation — replaces N+1 find_one loop
+    pipeline = [
+        {'$match': {'userId': uid}},
+        {'$sort': {'updatedAt': -1}},
+        {'$limit': limit},
+        {'$addFields': {
+            'messageCount': {'$size': {'$ifNull': ['$messages', []]}},
+            'lastMessage': {'$arrayElemAt': ['$messages', -1]},
+        }},
+        {'$project': {
+            '_id': 0,
+            'conversationId': 1,
+            'title': 1,
+            'createdAt': 1,
+            'messageCount': 1,
+            'lastMessage.content': 1,
+        }},
+    ]
 
     results = []
-    for doc in cursor:
-        last_msg = ''
-        msg_count = 0
-        if doc.get('messages'):
-            last_msg = doc['messages'][-1].get('content', '')[:80]
-        # Get total message count with a separate query
-        full_doc = artha_conversations_collection.find_one(
-            {'conversationId': doc['conversationId']},
-            {'messages': 1}
-        )
-        if full_doc and full_doc.get('messages'):
-            msg_count = len(full_doc['messages'])
+    for doc in artha_conversations_collection.aggregate(pipeline):
+        last_content = ''
+        last_msg = doc.get('lastMessage')
+        if last_msg and isinstance(last_msg, dict):
+            last_content = last_msg.get('content', '')[:80]
 
         results.append({
-            'id': doc['conversationId'],
+            'id': doc.get('conversationId', ''),
             'title': doc.get('title', 'New Chat'),
-            'createdAt': doc.get('createdAt', datetime.utcnow()).isoformat(),
-            'messageCount': msg_count,
-            'lastMessage': last_msg,
+            'createdAt': doc.get('createdAt', datetime.utcnow()).isoformat()
+                         if isinstance(doc.get('createdAt'), datetime)
+                         else str(doc.get('createdAt', '')),
+            'messageCount': doc.get('messageCount', 0),
+            'lastMessage': last_content,
         })
 
     return jsonify({'conversations': results}), 200
@@ -140,6 +206,9 @@ def get_messages(conv_id):
 
 # ═══════════════════════════════════════════════════════════
 # POST /artha/conversations/<id>/messages — Send + get reply
+# R1: $slice -50 on $push
+# R6: Per-user rate check
+# R7: Message length validation
 # ═══════════════════════════════════════════════════════════
 
 @artha_bp.route('/artha/conversations/<conv_id>/messages', methods=['POST'])
@@ -151,13 +220,28 @@ def send_message(conv_id):
     if artha_conversations_collection is None:
         return jsonify({'error': 'Database unavailable'}), 503
 
+    # ── R6: Per-user rate limit check ────────────────────────
+    allowed, rate_err = _check_rate_limit(uid)
+    if not allowed:
+        return jsonify({'error': rate_err, 'rateLimited': True}), 429
+
     data = request.json or {}
     user_message = data.get('message', '').strip()
     user_profile = data.get('userProfile', {})
     language = data.get('language', 'en')
 
+    # ── R7: Message validation ───────────────────────────────
     if not user_message:
         return jsonify({'error': 'Empty message'}), 400
+
+    if len(user_message) > MAX_MESSAGE_LENGTH:
+        return jsonify({
+            'error': f'Message too long. Maximum {MAX_MESSAGE_LENGTH} characters. '
+                     f'Your message has {len(user_message)}.'
+        }), 400
+
+    # Enforce the cap (defense-in-depth)
+    user_message = user_message[:MAX_MESSAGE_LENGTH]
 
     # Find the conversation
     conv = artha_conversations_collection.find_one(
@@ -231,11 +315,19 @@ def send_message(conv_id):
         'timestamp': now,
     }
 
-    # Auto-title: first user message → first 40 chars
+    # ── R1: $push with $slice — keeps last 50 messages only ──
     update_ops = {
-        '$push': {'messages': {'$each': [user_msg_doc, artha_msg_doc]}},
+        '$push': {
+            'messages': {
+                '$each': [user_msg_doc, artha_msg_doc],
+                '$slice': -MAX_MESSAGES_PER_CONVERSATION,  # Keep LAST 50 only
+            }
+        },
         '$set': {'updatedAt': now},
+        '$inc': {'messageCount': 2},
     }
+
+    # Auto-title: first user message → first 40 chars
     if not conv.get('messages'):
         title = user_message[:40].strip()
         if len(user_message) > 40:

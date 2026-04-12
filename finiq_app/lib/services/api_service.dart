@@ -24,8 +24,8 @@ class ApiService {
   void init() {
     _dio = Dio(BaseOptions(
       baseUrl: '${ApiConstants.baseUrl}/api',
-      connectTimeout: const Duration(seconds: 180),
-      receiveTimeout: const Duration(seconds: 180),
+      connectTimeout: const Duration(seconds: 30),
+      receiveTimeout: const Duration(seconds: 60),
       headers: {'Content-Type': 'application/json'},
     ));
 
@@ -87,9 +87,12 @@ class ApiService {
     try {
       final res = await _dio.post('/score/calculate');
       return HealthScoreModel.fromJson(res.data as Map<String, dynamic>);
-    } on DioException catch (_) {
-      // Return demo model on error for hackathon reliability
-      return HealthScoreModel.demo();
+    } on DioException catch (e) {
+      // R9: NEVER silently return fake data — throw so UI shows error + retry
+      throw ApiException(
+        _friendlyError(e),
+        statusCode: e.response?.statusCode,
+      );
     }
   }
 
@@ -107,8 +110,11 @@ class ApiService {
         'current_savings': currentSavings,
       });
       return FirePlanModel.fromJson(res.data as Map<String, dynamic>);
-    } on DioException catch (_) {
-      return FirePlanModel.demo();
+    } on DioException catch (e) {
+      throw ApiException(
+        _friendlyError(e),
+        statusCode: e.response?.statusCode,
+      );
     }
   }
 
@@ -124,8 +130,11 @@ class ApiService {
         'deductions': deductions ?? {},
       });
       return TaxReportModel.fromJson(res.data as Map<String, dynamic>);
-    } on DioException catch (_) {
-      return TaxReportModel.demo();
+    } on DioException catch (e) {
+      throw ApiException(
+        _friendlyError(e),
+        statusCode: e.response?.statusCode,
+      );
     }
   }
 

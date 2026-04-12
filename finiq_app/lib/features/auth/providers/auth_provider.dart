@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../services/firebase_service.dart';
 import '../../../services/user_prefs_service.dart';
 import '../../../services/api_service.dart';
+import '../../../services/cache_service.dart';
 
 // Stream of Firebase auth state
 final authStateProvider = StreamProvider<User?>((ref) {
@@ -25,6 +26,10 @@ class AuthController extends StateNotifier<AuthState> {
     state = state.copyWith(isLoading: true, error: null);
     try {
       final credential = await FirebaseService.instance.signInWithGoogle();
+
+      // R3: Scope cache to this user's UID
+      final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
+      if (uid.isNotEmpty) CacheService.setCurrentUser(uid);
       
       // Fetch user profile from MongoDB backend to fix Bug 1 (Cross-device sync)
       try {
@@ -54,6 +59,8 @@ class AuthController extends StateNotifier<AuthState> {
   }
 
   Future<void> signOut() async {
+    // R3: Clear UID-scoped cache BEFORE signing out (UID still available)
+    await CacheService.clearCurrentUserData();
     // Clear ALL UID-prefixed user data before signing out
     await UserPrefsService.clearCurrentUserData();
     await FirebaseService.instance.signOut();

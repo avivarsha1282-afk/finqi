@@ -79,7 +79,7 @@ Future<DashboardData> _buildDashboardData(Map<String, dynamic> profile, bool off
   final dims = hsMap?['dimensions'] as Map<String, dynamic>? ?? {};
   final dimEmergency = dims['emergency_fund'] ?? (await UserPrefsService.getInt('dim_emergency') ?? 6);
   final dimInsurance = dims['insurance'] ?? (await UserPrefsService.getInt('dim_insurance') ?? 0);
-  final dimInvestment = dims['diversification'] ?? (await UserPrefsService.getInt('dim_investment') ?? 8);
+  final dimSavingsRate = dims['savings_rate'] ?? dims['diversification'] ?? (await UserPrefsService.getInt('dim_investment') ?? 8);
   final dimDebt = dims['debt_health'] ?? (await UserPrefsService.getInt('dim_debt') ?? 14);
   final dimTax = dims['tax_efficiency'] ?? (await UserPrefsService.getInt('dim_tax') ?? 4);
   final dimFire = dims['retirement'] ?? (await UserPrefsService.getInt('dim_fire') ?? 2);
@@ -147,7 +147,7 @@ Future<DashboardData> _buildDashboardData(Map<String, dynamic> profile, bool off
     dimensions: [
       DimensionScore(name: 'Emergency Fund', icon: 'savings', score: (dimEmergency as num).toInt(), maxScore: 20, status: dimStatus((dimEmergency as num).toInt(), 20)),
       DimensionScore(name: 'Insurance', icon: 'shield', score: (dimInsurance as num).toInt(), maxScore: 20, status: dimStatus((dimInsurance as num).toInt(), 20)),
-      DimensionScore(name: 'Investment Mix', icon: 'pie_chart', score: (dimInvestment as num).toInt(), maxScore: 20, status: dimStatus((dimInvestment as num).toInt(), 20)),
+      DimensionScore(name: 'Savings Rate', icon: 'trending_up', score: (dimSavingsRate as num).toInt(), maxScore: 20, status: dimStatus((dimSavingsRate as num).toInt(), 20)),
       DimensionScore(name: 'Debt Health', icon: 'credit_card', score: (dimDebt as num).toInt(), maxScore: 20, status: dimStatus((dimDebt as num).toInt(), 20, isDebt: true)),
       if (annualIncome >= 300000)
         DimensionScore(name: 'Tax Efficiency', icon: 'receipt', score: (dimTax as num).toInt(), maxScore: 20, status: dimStatus((dimTax as num).toInt(), 20)),
@@ -177,7 +177,7 @@ Future<DashboardData> _buildDashboardData(Map<String, dynamic> profile, bool off
     targetYears: goalYearsInt,
     currentSavings: currentSavings,
     requiredMonthlySip: sip,
-    projectedCorpus: goalAmount,
+    projectedCorpus: fireMap != null ? (fireMap['projected_corpus'] as num?)?.toDouble() ?? goalAmount : goalAmount,
     estimatedReturn: 12.0,
     scenarios: [
       FireScenario(
@@ -194,9 +194,12 @@ Future<DashboardData> _buildDashboardData(Map<String, dynamic> profile, bool off
       AssetAllocation(name: 'Gold / Debt', percentage: 20, colorHex: '#F59E0B'),
       AssetAllocation(name: 'Intl. Funds', percentage: 10, colorHex: '#8B5CF6'),
     ],
-    arthaMessage: 'Your $goalYearsInt-year plan requires a monthly SIP to reach your goal.',
+    arthaMessage: fireMap?['recommendation'] ?? fireMap?['artha_message'] ?? 'Your $goalYearsInt-year plan requires a monthly SIP to reach your goal.',
     growthData: timeline,
-    achievability: fireMap != null ? fireMap['achievability'] : (sip <= 100000 ? 'ACHIEVABLE' : (sip <= 300000 ? 'STRETCH' : 'VERY_AGGRESSIVE')),
+    achievability: fireMap?['achievability'] ?? (sip <= 100000 ? 'ACHIEVABLE' : (sip <= 300000 ? 'STRETCH' : 'VERY_AGGRESSIVE')),
+    goalStatus: fireMap?['goal_status'] ?? 'IN_PROGRESS',
+    sipLabel: fireMap?['sip_label'] ?? 'MANAGEABLE',
+    goalStatusMessage: fireMap?['goal_status_message'] ?? '',
   );
 
   final taxMap = profile['tax_report'] as Map<String, dynamic>?;

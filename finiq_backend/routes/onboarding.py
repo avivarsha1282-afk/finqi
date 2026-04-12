@@ -13,7 +13,8 @@ def _validate_onboarding_data(data: dict):
     """Validate onboarding input — reject negative numbers and unrealistic values."""
     numeric_fields = [
         'monthly_salary', 'monthly_expense', 'current_savings',
-        'financial_goal_amount', 'total_emi', 'section_80c',
+        'financial_goal_amount', 'total_emi', 'monthly_emi',
+        'total_loan', 'section_80c',
         'premium_80d', 'nps_contribution', 'monthly_rent',
     ]
     for field in numeric_fields:
@@ -59,11 +60,11 @@ def save_onboarding():
     # ── Build normalized profile ─────────────────────────────────────────────
     def _float(key, default=0.0):
         try: return float(data.get(key, default))
-        except: return float(default)
+        except (TypeError, ValueError): return float(default)
 
     def _int(key, default=0):
         try: return int(data.get(key, default))
-        except: return int(default)
+        except (TypeError, ValueError): return int(default)
 
     def _bool(key, default=False):
         v = data.get(key, default)
@@ -74,12 +75,15 @@ def save_onboarding():
     annual_income  = monthly_salary * 12
 
     profile = {
+        'fullName':             data.get('name', data.get('fullName', '')),
         'age':                  _int('age'),
         'monthly_salary':       monthly_salary,
         'annual_income':        annual_income,
         'monthly_expense':      _float('monthly_expense'),
         'current_savings':      _float('current_savings'),
         'total_emi':            _float('total_emi'),
+        'monthly_emi':          _float('monthly_emi', _float('total_emi')),
+        'total_loan':           _float('total_loan'),
         'has_health_insurance': _bool('has_health_insurance'),
         'has_term_insurance':   _bool('has_term_insurance'),
         'section_80c':          _float('section_80c'),
@@ -90,6 +94,8 @@ def save_onboarding():
         'financial_goal_amount': _float('financial_goal_amount', 10_000_000),
         'target_timeline':      _int('target_timeline', 10),
         'risk_appetite':        data.get('risk_appetite', 'moderate'),
+        'occupation':           data.get('occupation', 'Salaried'),
+        'city':                 data.get('city', 'India'),
     }
 
     # ── Save profile & mark onboarding complete ──────────────────────────────

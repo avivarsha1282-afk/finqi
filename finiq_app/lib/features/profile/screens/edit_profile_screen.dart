@@ -33,6 +33,8 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> with Sing
   final _incomeCtrl = TextEditingController();
   final _expenseCtrl = TextEditingController();
   final _savingsCtrl = TextEditingController();
+  final _emiCtrl = TextEditingController();
+  final _loanCtrl = TextEditingController();
   final _goalAmountCtrl = TextEditingController();
   final _goalYearsCtrl = TextEditingController();
   String _riskAppetite = 'Moderate';
@@ -70,6 +72,8 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> with Sing
       _incomeCtrl.text = getNum('monthly_income').toStringAsFixed(0);
       _expenseCtrl.text = getNum('monthly_expense').toStringAsFixed(0);
       _savingsCtrl.text = getNum('current_savings').toStringAsFixed(0);
+      _emiCtrl.text = getNum('monthly_emi').toStringAsFixed(0);
+      _loanCtrl.text = getNum('total_loan').toStringAsFixed(0);
       _goalAmountCtrl.text = getNum('goal_amount').toStringAsFixed(0);
       _goalYearsCtrl.text = (_data['goal_years'] ?? 7).toString();
       
@@ -127,6 +131,8 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> with Sing
     final income = _parseRaw(_incomeCtrl.text);
     final expense = _parseRaw(_expenseCtrl.text);
     final savings = _parseRaw(_savingsCtrl.text);
+    final emi = _parseRaw(_emiCtrl.text);
+    final loan = _parseRaw(_loanCtrl.text);
     final goalAmt = _parseRaw(_goalAmountCtrl.text);
 
     // Tier 3 — block save if corruption suggestion is active (user must resolve)
@@ -136,6 +142,10 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> with Sing
 
     if (expense > income && income > 0) {
       setState(() => _validationError = 'Expenses cannot exceed income');
+      return;
+    }
+    if (emi > income && income > 0) {
+      setState(() => _validationError = 'EMI cannot exceed income');
       return;
     }
     if (savings > 500000000) {
@@ -153,6 +163,9 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> with Sing
     _data['annual_income'] = income * 12;
     _data['monthly_expense'] = expense;
     _data['current_savings'] = savings;
+    _data['monthly_emi'] = emi;
+    _data['total_emi'] = emi;
+    _data['total_loan'] = loan;
     _data['goal_amount'] = goalAmt;
     _data['financial_goal_amount'] = goalAmt;
     _data['goal_years'] = int.tryParse(_goalYearsCtrl.text) ?? 7;
@@ -175,7 +188,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> with Sing
   @override
   void dispose() {
     _tabCtrl.dispose();
-    for (final c in [_nameCtrl, _ageCtrl, _cityCtrl, _incomeCtrl, _expenseCtrl, _savingsCtrl, _goalAmountCtrl, _goalYearsCtrl]) {
+    for (final c in [_nameCtrl, _ageCtrl, _cityCtrl, _incomeCtrl, _expenseCtrl, _savingsCtrl, _emiCtrl, _loanCtrl, _goalAmountCtrl, _goalYearsCtrl]) {
       c.dispose();
     }
     super.dispose();
@@ -354,6 +367,18 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> with Sing
             inputFormatters: [FilteringTextInputFormatter.digitsOnly, CurrencyInputFormatter()],
             style: const TextStyle(color: Colors.white),
             decoration: onboardingInputDecoration('200000', prefix: '₹ ')),
+          const SizedBox(height: 16),
+          onboardingLabel('Monthly EMI (if any)'),
+          TextFormField(controller: _emiCtrl, keyboardType: TextInputType.number,
+            inputFormatters: [FilteringTextInputFormatter.digitsOnly, CurrencyInputFormatter()],
+            style: const TextStyle(color: Colors.white),
+            decoration: onboardingInputDecoration('0 if no loans', prefix: '\u20B9 ')),
+          const SizedBox(height: 16),
+          onboardingLabel('Total Outstanding Loan'),
+          TextFormField(controller: _loanCtrl, keyboardType: TextInputType.number,
+            inputFormatters: [FilteringTextInputFormatter.digitsOnly, CurrencyInputFormatter()],
+            style: const TextStyle(color: Colors.white),
+            decoration: onboardingInputDecoration('0', prefix: '\u20B9 ')),
           const SizedBox(height: 16),
           onboardingLabel('Goal Type'),
           Container(

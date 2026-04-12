@@ -3,6 +3,10 @@ import 'indian_number_format.dart';
 class CurrencyFormatter {
   CurrencyFormatter._();
 
+  /// Indian Rupee symbol — explicit Unicode U+20B9
+  /// Never use a string literal ₹ which might be misencoded on some devices
+  static const String rupeeSymbol = '\u20B9';
+
   /// Full rupee: ₹50,00,000
   static String format(double amount) => IndianNumberFormat.formatRupee(amount);
 

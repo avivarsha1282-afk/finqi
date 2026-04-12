@@ -63,6 +63,13 @@ finiq_backend/env/
 # Environment variables (secrets!)
 finiq_backend/.env
 
+# Log files (may contain user data!)
+finiq_backend/flask_log.txt
+finiq_backend/server.log
+finiq_backend/logs/
+*.log
+*.log.*
+
 # Python cache
 __pycache__/
 *.py[cod]

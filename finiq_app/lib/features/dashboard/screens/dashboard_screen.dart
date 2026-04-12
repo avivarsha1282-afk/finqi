@@ -272,11 +272,29 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                             Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                const Text('Monthly SIP needed:', style: TextStyle(color: Color(0xFF9CA3AF), fontSize: 12)),
-                                Text(
-                                  CurrencyFormatter.monthly(data.monthlySipNeeded),
-                                  style: const TextStyle(color: Color(0xFF00C896), fontSize: 14, fontWeight: FontWeight.w700),
-                                ),
+                                if (data.firePlan.goalStatus == 'ALREADY_ACHIEVED') ...[
+                                  Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: const [
+                                      Icon(Icons.check_circle_rounded, color: Color(0xFF00C896), size: 16),
+                                      SizedBox(width: 6),
+                                      Text('Goal Achieved!', style: TextStyle(color: Color(0xFF00C896), fontSize: 13, fontWeight: FontWeight.w700)),
+                                    ],
+                                  ),
+                                  const Text('Set Higher Goal \u2192', style: TextStyle(color: Color(0xFF9CA3AF), fontSize: 12)),
+                                ] else if (data.firePlan.goalStatus == 'NO_SIP_NEEDED') ...[
+                                  const Text('No SIP needed', style: TextStyle(color: Color(0xFF00C896), fontSize: 13, fontWeight: FontWeight.w600)),
+                                  Text(
+                                    'Grows to ${CurrencyFormatter.compact(data.firePlan.projectedCorpus)}',
+                                    style: const TextStyle(color: Color(0xFF9CA3AF), fontSize: 12),
+                                  ),
+                                ] else ...[
+                                  const Text('Monthly SIP needed:', style: TextStyle(color: Color(0xFF9CA3AF), fontSize: 12)),
+                                  Text(
+                                    CurrencyFormatter.monthly(data.monthlySipNeeded),
+                                    style: const TextStyle(color: Color(0xFF00C896), fontSize: 14, fontWeight: FontWeight.w700),
+                                  ),
+                                ],
                               ],
                             ),
                           ],

@@ -1,3 +1,4 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -29,6 +30,12 @@ void main() async {
 
   // Hive offline cache
   await CacheService.init();
+
+  // R3: Scope cache to current user (if already logged in from previous session)
+  final currentUser = FirebaseAuth.instance.currentUser;
+  if (currentUser != null) {
+    CacheService.setCurrentUser(currentUser.uid);
+  }
 
   // Initialize API service
   ApiService.instance.init();

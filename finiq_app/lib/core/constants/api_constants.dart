@@ -11,7 +11,12 @@ class ApiConstants {
   static const String _prodBaseUrl =
       'https://finiq-backend-production.up.railway.app';
 
-  static const String _devBaseUrl = 'http://10.240.191.92:5000';
+  // R10: Dev URL uses env-based override, no private IP in release binary.
+  // For local dev, run: flutter run --dart-define=DEV_API_URL=http://your.ip:5000
+  static const String _devBaseUrl = String.fromEnvironment(
+    'DEV_API_URL',
+    defaultValue: 'http://localhost:5000',
+  );
 
   static String get baseUrl => isProduction ? _prodBaseUrl : _devBaseUrl;
 

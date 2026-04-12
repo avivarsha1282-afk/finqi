@@ -9,7 +9,10 @@ class FirePlanModel {
   final List<AssetAllocation> assetAllocation;
   final String arthaMessage;
   final List<ChartDataPoint> growthData;
-  final String achievability; // ACHIEVABLE | STRETCH | VERY_AGGRESSIVE
+  final String achievability;
+  final String goalStatus;       // ALREADY_ACHIEVED | NO_SIP_NEEDED | IN_PROGRESS
+  final String sipLabel;         // ALREADY_ACHIEVED | COMFORTABLE | MANAGEABLE | STRETCH | DIFFICULT
+  final String goalStatusMessage;
 
   const FirePlanModel({
     required this.targetCorpus,
@@ -23,6 +26,9 @@ class FirePlanModel {
     required this.arthaMessage,
     required this.growthData,
     required this.achievability,
+    this.goalStatus = 'IN_PROGRESS',
+    this.sipLabel = 'MANAGEABLE',
+    this.goalStatusMessage = '',
   });
 
   factory FirePlanModel.fromJson(Map<String, dynamic> json) {
@@ -49,7 +55,7 @@ class FirePlanModel {
       targetYears: json['target_years'] ?? 7,
       currentSavings: (json['current_savings'] ?? 200000).toDouble(),
       requiredMonthlySip: (json['required_monthly_sip'] ?? json['required_sip'] ?? 180000).toDouble(),
-      projectedCorpus: (json['target_amount'] ?? json['projected_corpus'] ?? 15200000).toDouble(),
+      projectedCorpus: (json['projected_corpus'] ?? json['target_amount'] ?? 15200000).toDouble(),
       estimatedReturn: (json['annual_return'] ?? json['estimated_return'] ?? 14.2).toDouble(),
       scenarios: scenarios,
       assetAllocation: allocation.isNotEmpty ? allocation : [
@@ -58,9 +64,12 @@ class FirePlanModel {
         AssetAllocation(name: 'Gold / Debt', percentage: 20, colorHex: '#F59E0B'),
         AssetAllocation(name: 'Intl. Funds', percentage: 10, colorHex: '#8B5CF6'),
       ],
-      arthaMessage: json['artha_message'] ?? '',
+      arthaMessage: json['artha_message'] ?? json['recommendation'] ?? '',
       growthData: growthData,
       achievability: json['achievability'] ?? 'ACHIEVABLE',
+      goalStatus: json['goal_status'] ?? 'IN_PROGRESS',
+      sipLabel: json['sip_label'] ?? 'MANAGEABLE',
+      goalStatusMessage: json['goal_status_message'] ?? '',
     );
   }
 
@@ -82,9 +91,11 @@ class FirePlanModel {
         AssetAllocation(name: 'Gold/Debt', percentage: 20, colorHex: '#F59E0B'),
         AssetAllocation(name: 'International', percentage: 10, colorHex: '#E3B341'),
       ],
-      arthaMessage: 'Your current trajectory requires ₹1.8L/mo SIP to hit your 7-year goal. We recommend shifting 15% from Debt to Mid-Caps to optimize for the timeline.',
+      arthaMessage: 'Your current trajectory requires \u20B91.8L/mo SIP to hit your 7-year goal.',
       growthData: List.generate(8, (i) => ChartDataPoint(year: i, corpus: 200000 + (i * 1850000 * (1 + 0.05 * i)))),
       achievability: 'ACHIEVABLE',
+      goalStatus: 'IN_PROGRESS',
+      sipLabel: 'MANAGEABLE',
     );
   }
 }

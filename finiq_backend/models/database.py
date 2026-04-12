@@ -45,3 +45,6 @@ def create_indexes():
     tax_reports_collection.create_index([('firebase_uid', ASCENDING)], unique=True, background=True)
     chat_sessions_collection.create_index([('firebase_uid', ASCENDING)], unique=True, background=True)
     artha_conversations_collection.create_index([('userId', ASCENDING), ('createdAt', ASCENDING)], background=True)
+    # R1: Compound index for fast per-user conversation listing sorted by recency
+    artha_conversations_collection.create_index([('userId', ASCENDING), ('updatedAt', -1)], background=True)
+    artha_conversations_collection.create_index([('conversationId', ASCENDING)], unique=True, background=True)
