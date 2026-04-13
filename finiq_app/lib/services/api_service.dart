@@ -121,14 +121,24 @@ class ApiService {
   // ─── Tax Wizard ────────────────────────────────────────────
   Future<TaxReportModel> compareTax({
     required double annualIncome,
-    Map<String, dynamic>? deductions,
+    double? investment80c,
+    double? premium80d,
+    double? npsContribution,
+    double? hra,
+    double? homeLoanInterest,
   }) async {
     if (ApiConstants.demoMode) return TaxReportModel.demo();
     try {
-      final res = await _dio.post('/tax/compare', data: {
+      final body = <String, dynamic>{
         'annual_income': annualIncome,
-        'deductions': deductions ?? {},
-      });
+      };
+      if (investment80c != null) body['investment_80c'] = investment80c;
+      if (premium80d != null) body['premium_80d'] = premium80d;
+      if (npsContribution != null) body['nps_contribution'] = npsContribution;
+      if (hra != null) body['hra'] = hra;
+      if (homeLoanInterest != null) body['home_loan_interest'] = homeLoanInterest;
+
+      final res = await _dio.post('/tax/compare', data: body);
       return TaxReportModel.fromJson(res.data as Map<String, dynamic>);
     } on DioException catch (e) {
       throw ApiException(

@@ -15,6 +15,13 @@ def get_tax_report():
     data = request.json or {}
     annual_income = data.get('annual_income')
 
+    # Accept inline deduction overrides from "Add My Deductions" mode
+    deduction_80c = data.get('investment_80c', None)
+    deduction_80d = data.get('premium_80d', None)
+    deduction_nps = data.get('nps_contribution', None)
+    deduction_hra = data.get('hra', None)
+    deduction_home = data.get('home_loan_interest', None)
+
     # If user sent a custom income from Tax Wizard, recalculate live
     if annual_income is not None and float(annual_income) > 0:
         # Fetch user's actual deductions from profile for personalised comparison
@@ -23,13 +30,18 @@ def get_tax_report():
 
         result = compare_regimes(
             income=float(annual_income),
-            investment_80c=float(profile.get('section_80c', 0)),
-            premium_80d=float(profile.get('premium_80d', 0)),
-            nps_contribution=float(profile.get('nps_contribution', 0)),
-            hra=float(profile.get('hra', 0)),
+            investment_80c=float(deduction_80c if deduction_80c is not None
+                                 else profile.get('section_80c', 0)),
+            premium_80d=float(deduction_80d if deduction_80d is not None
+                              else profile.get('premium_80d', 0)),
+            nps_contribution=float(deduction_nps if deduction_nps is not None
+                                   else profile.get('nps_contribution', 0)),
+            hra=float(deduction_hra if deduction_hra is not None
+                      else profile.get('hra', 0)),
+            home_loan_interest=float(deduction_home if deduction_home is not None
+                                     else profile.get('home_loan_interest', 0)),
         )
 
-        # Add labels and artha verdict for Flutter parsing
         old_tax = result['old_regime']['total_tax']
         new_tax = result['new_regime']['total_tax']
         recommended = result['recommended_regime']
@@ -43,19 +55,53 @@ def get_tax_report():
             )
         else:
             total_deductions = result['old_regime'].get('total_deductions', 0)
-            if total_deductions == 0:
+            total_potential = result['total_potential_saving']
+            if total_deductions <= 50000:  # Only standard deduction
                 artha_verdict = (
                     f'With no active deductions, the {recommended.capitalize()} Regime '
                     f'saves you ₹{saving:,}. Maximize 80C + 80D + NPS to potentially '
-                    f'save ₹{result["total_potential_saving"]:,} more.'
+                    f'save ₹{total_potential:,} more in the Old Regime.'
                 )
             else:
                 artha_verdict = (
                     f'With your deductions of ₹{total_deductions:,}, the '
                     f'{recommended.capitalize()} Regime saves you ₹{saving:,}. '
-                    f'You can still save ₹{result["total_potential_saving"]:,} by '
+                    f'You can still save ₹{total_potential:,} by '
                     f'using remaining deduction headroom.'
                 )
+
+        # Build enhanced missed_deductions for Flutter
+        missed_deductions_response = []
+        for d in result.get('missed_deductions', []):
+            utilised = d.get('utilised', 0)
+            maximum = d.get('maximum', 0)
+            remaining = d.get('remaining', 0)
+            status = d.get('status', 'NOT_UTILISED')
+
+            # Status label for Flutter
+            if status == 'MAXIMISED':
+                status_label = 'MAXIMISED'
+            elif status == 'PARTIAL':
+                status_label = 'PARTIAL'
+            else:
+                status_label = 'NOT UTILIZED'
+
+            missed_deductions_response.append({
+                'name': f"Section {d['section']}",
+                'subtitle': d['description'],
+                'amount': d['tax_saving'],
+                'status': status_label,
+                'icon': ('account_balance' if '80C' in d['section']
+                         else ('health_and_safety' if '80D' in d['section']
+                               else 'savings')),
+                # Enhanced fields for v2 UI
+                'utilised': utilised,
+                'maximum': maximum,
+                'remaining': remaining,
+                'tax_saving_if_maximised': d.get('tax_saving_if_maximised', 0),
+                'monthly_to_maximise': d.get('monthly_to_maximise', 0),
+                'deduction_status': status,
+            })
 
         return jsonify({
             'old_regime': {
@@ -73,19 +119,11 @@ def get_tax_report():
                 'is_recommended': recommended == 'new',
             },
             'recommended_regime': recommended,
+            'tax_saving_by_switching': saving,
             'total_potential_saving': result['total_potential_saving'],
-            'missed_deductions': [
-                {
-                    'name': f"Section {d['section']}",
-                    'subtitle': d['description'],
-                    'amount': d['tax_saving'],
-                    'status': 'NOT UTILIZED' if d['potential_deduction'] >= 100000 else 'PARTIAL',
-                    'icon': 'account_balance' if '80C' in d['section'] else (
-                        'health_and_safety' if '80D' in d['section'] else 'savings'
-                    ),
-                }
-                for d in result.get('missed_deductions', [])
-            ],
+            'marginal_rate': result.get('marginal_rate', 0.3),
+            'missed_deductions': missed_deductions_response,
+            'old_regime_with_max_deductions': result.get('old_regime_with_max_deductions', {}),
             'artha_verdict': artha_verdict,
             'below_threshold': result.get('below_threshold', False),
         }), 200

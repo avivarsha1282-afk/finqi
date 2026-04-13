@@ -139,13 +139,35 @@ def call_text_llm(prompt: str, system: str = '', max_tokens: int = 500) -> str:
     return None
 
 
+# ── Rejection phrases Llama uses when it wrongly refuses ─────────────────────
+_REJECTION_PHRASES = [
+    "i can only help with personal finance",
+    "i'm only able to assist with",
+    "outside my scope",
+    "not a financial question",
+    "cannot help with",
+    "i can't help with that",
+    "i'm not able to",
+    "that's not something i can",
+    "falls outside my expertise",
+    "i'm designed to help with finance",
+    "i apologize, but i can only",
+    "sorry, but that question",
+]
+
+def _is_rejection(response: str) -> bool:
+    """Check if the LLM wrongly refused a valid question."""
+    lower = response.lower()
+    return any(phrase in lower for phrase in _REJECTION_PHRASES)
+
+
 # ── Language-aware Artha Router ──────────────────────────────────────────────
 def route_artha_call(prompt: str, system: str, language: str = 'en',
                      max_tokens: int = 500) -> str:
     """
     Route Artha chat based on language.
     Hindi → Gemini (better Hindi quality)
-    English → Ollama/Groq/Gemini cascade (saves Gemini quota)
+    English → Groq with rejection detection → Gemini fallback
     """
     if language == 'hi':
         # Gemini is better for Hindi responses
@@ -160,5 +182,44 @@ def route_artha_call(prompt: str, system: str, language: str = 'en',
             return result
         return None
     else:
-        # English: use the full cascade to save Gemini quota
-        return call_text_llm(prompt, system, max_tokens)
+        # English: Try local Ollama first
+        result = call_local_llama(prompt, system, max_tokens)
+        if result and not _is_rejection(result):
+            print("[LLM] Used: Ollama local")
+            return result
+
+        # Try Groq (production)
+        result = call_groq_llama(prompt, system, max_tokens)
+        if result:
+            if _is_rejection(result):
+                print("[ARTHA] Groq rejected a valid question. Retrying with override...")
+                # Retry with explicit instruction that this IS a finance question
+                override_prompt = (
+                    "IMPORTANT: The following question IS a personal finance question. "
+                    "It relates to budgeting, money management, spending, or financial planning. "
+                    "Answer it helpfully with specific numbers and practical advice.\n\n"
+                    f"{prompt}"
+                )
+                result = call_groq_llama(override_prompt, system, max_tokens)
+                if result and not _is_rejection(result):
+                    print("[LLM] Used: Groq (retry success)")
+                    return result
+                # Groq still refusing — fall through to Gemini
+                print("[ARTHA] Groq refused twice. Using Gemini fallback.")
+                result = call_gemini_text_only(prompt, system)
+                if result:
+                    print("[LLM] Used: Gemini fallback (Groq refused)")
+                    return result
+            else:
+                print("[LLM] Used: Groq cloud")
+                return result
+
+        # Last resort: Gemini
+        result = call_gemini_text_only(prompt, system)
+        if result:
+            print("[LLM] Used: Gemini fallback")
+            return result
+
+        print("[LLM] All providers failed")
+        return None
+

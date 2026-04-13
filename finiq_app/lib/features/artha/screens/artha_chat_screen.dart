@@ -26,15 +26,21 @@ class _ArthaChatScreenState extends ConsumerState<ArthaChatScreen> {
   bool _isLoading = true;
 
   static const _suggestionsEn = [
-    'What should I invest in first?',
-    'How to save ₹1 lakh tax this year?',
-    'Explain mutual funds for beginners',
+    'How do I save ₹50K this month? 💰',
+    'Best tax saving options for me 📋',
+    'Review my FIRE plan 🔥',
+    'Am I spending too much? 📊',
+    'How to build emergency fund?',
+    'Which stocks should I look at? 📈',
   ];
 
   static const _suggestionsHi = [
-    'पहले क्या निवेश करूं?',
-    'इस साल ₹1 लाख टैक्स कैसे बचाएं?',
-    'म्यूचुअल फंड क्या है?',
+    'इस महीने ₹50K कैसे बचाएं? 💰',
+    'मेरे लिए सबसे अच्छा टैक्स बचत विकल्प 📋',
+    'मेरा FIRE प्लान कैसा है? 🔥',
+    'क्या मैं ज़्यादा खर्च कर रहा हूं? 📊',
+    'इमर्जेंसी फंड कैसे बनाएं?',
+    'कौनसे शेयर अच्छे हैं? 📈',
   ];
 
   @override
@@ -250,6 +256,8 @@ class _ArthaChatScreenState extends ConsumerState<ArthaChatScreen> {
                           style: const TextStyle(color: Colors.white, fontSize: 15),
                           maxLines: 3,
                           minLines: 1,
+                          maxLength: 2000,
+                          buildCounter: (_, {required currentLength, required isFocused, maxLength}) => null,
                           decoration: InputDecoration(
                             hintText: t(ref, 'ask_artha'),
                             hintStyle: const TextStyle(color: AppColors.textTertiary),
@@ -413,13 +421,16 @@ class _ArthaChatScreenState extends ConsumerState<ArthaChatScreen> {
         runSpacing: 8,
         children: suggestions.map((s) {
           return GestureDetector(
-            onTap: () => _sendMessage(s),
+            onTap: () {
+              _controller.text = s;
+              _controller.selection = TextSelection.collapsed(offset: s.length);
+            },
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               decoration: BoxDecoration(
-                color: const Color(0xFF1A1A1A),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFF1F2937)),
+                color: Colors.white.withValues(alpha: 0.06),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
               ),
               child: Text(s, style: const TextStyle(fontSize: 13, color: AppColors.textSecondary)),
             ),
