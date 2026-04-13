@@ -472,17 +472,14 @@ class _TaxWizardScreenState extends ConsumerState<TaxWizardScreen> {
       case 'MAXIMISED':
         statusColor = AppColors.primaryTeal;
         statusText = 'MAXIMISED ✓';
-        statusIcon = Icons.check_circle_outline;
         break;
       case 'PARTIAL':
         statusColor = AppColors.warningAmber;
         statusText = '₹${CurrencyFormatter.compact(ch.remaining)} left';
-        statusIcon = Icons.pending_outlined;
         break;
       default: // NOT_UTILISED
         statusColor = AppColors.primaryTeal;
         statusText = 'SAVE ${CurrencyFormatter.compact(ch.taxSavingIfMaximised)}';
-        statusIcon = Icons.add_circle_outline;
     }
 
     return GestureDetector(
