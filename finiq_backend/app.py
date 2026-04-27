@@ -15,7 +15,7 @@ IS_PRODUCTION = os.getenv('RAILWAY_ENVIRONMENT') or os.getenv('FLASK_ENV') == 'p
 
 if IS_PRODUCTION:
     allowed_origins = [
-        'https://finiq-backend-production.up.railway.app',
+        'https://finqi-production.up.railway.app',
         # Add your Flutter web domain here if ever needed
     ]
     CORS(app, origins=allowed_origins, supports_credentials=True)
